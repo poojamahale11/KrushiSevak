@@ -1,0 +1,29 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Bot, Send, Sprout, Mic, MicOff, ImagePlus, X, User, Sparkles } from 'lucide-react';
+import { api } from '../services/api';
+import { useLanguage } from '../context/LanguageContext';
+
+export const AgriAssistant = () => {
+  const { lang } = useLanguage();
+  const greeting = lang === 'mr' ? 'नमस्कार! मी Krushi AI Assistant आहे. शेतीशी संबंधित कोणताही प्रश्न विचारा.' : lang === 'hi' ? 'नमस्ते! मैं Krushi AI Assistant हूँ। खेती से जुड़ा कोई भी सवाल पूछें।' : 'Hello! I am Krushi AI Assistant. Ask me any farming question.';
+  const [messages, setMessages] = useState([{ from:'bot', text:greeting }]);
+  const [question, setQuestion] = useState(''); const [loading, setLoading] = useState(false); const [listening, setListening] = useState(false); const [image, setImage] = useState(null); const fileRef = useRef(null);
+
+  useEffect(() => { let active=true; api.getChatHistory().then(r=>{ const h=(r.history||[]).slice().reverse(); if(active && h.length) setMessages(h.flatMap(x=>[{from:'user',text:x.question},{from:'bot',text:x.answer}])); }).catch(()=>{}); return ()=>{active=false;}; }, [lang]);
+
+  const send = async e => {
+    e?.preventDefault(); if ((!question.trim() && !image) || loading) return;
+    const q=question.trim(), preview=image; setMessages(m=>[...m,{from:'user',text:q || 'Image attached', image:preview?.url}]); setQuestion(''); setImage(null); setLoading(true);
+    try { const r=await api.chat(q,lang,preview?.data || ''); setMessages(m=>[...m,{from:'bot',text:r.answer}]); } catch(err) { setMessages(m=>[...m,{from:'bot',text:err.message || 'Please try again.'}]); } finally { setLoading(false); }
+  };
+  const voice=()=>{ const SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR){alert('Voice input is not supported in this browser.');return;} const rec=new SR(); rec.lang=lang==='mr'?'mr-IN':lang==='hi'?'hi-IN':'en-IN'; rec.interimResults=false; rec.onstart=()=>setListening(true); rec.onend=()=>setListening(false); rec.onerror=()=>setListening(false); rec.onresult=e=>setQuestion(e.results[0][0].transcript); rec.start(); };
+  const pickImage=e=>{ const f=e.target.files?.[0]; if(!f)return; if(!f.type.startsWith('image/'))return alert('Please select an image file.'); if(f.size>7*1024*1024)return alert('Image must be under 7 MB.'); const reader=new FileReader(); reader.onload=()=>setImage({data:reader.result,url:URL.createObjectURL(f),name:f.name}); reader.readAsDataURL(f); e.target.value=''; };
+
+  return <div style={{ background:'var(--bg-app)', minHeight:'80vh', padding:'2rem 1rem 5rem' }}><div className="container" style={{ maxWidth:980 }}><div className="card" style={{ padding:0, overflow:'hidden', borderRadius:20, boxShadow:'var(--shadow-md)' }}>
+    <header style={{ padding:'1.2rem 1.4rem', borderBottom:'1px solid var(--border-light)', display:'flex', alignItems:'center', gap:12, background:'#fff' }}><div style={{width:48,height:48,borderRadius:14,background:'var(--primary-50)',color:'var(--primary-600)',display:'grid',placeItems:'center'}}><Bot size={26}/></div><div><h1 style={{margin:0,fontSize:'1.3rem'}}>Krushi AI Assistant</h1><p style={{margin:3,color:'var(--text-muted)',fontSize:'.82rem'}}>Ask farming questions • Text • Voice • Image • English / Hindi / Marathi</p></div><Sparkles size={19} style={{marginLeft:'auto',color:'var(--accent-gold)'}}/></header>
+    <div style={{ minHeight:470, maxHeight:560, overflowY:'auto', padding:'1.25rem', background:'#f7faf7' }}>{messages.map((m,i)=><div key={i} style={{display:'flex',justifyContent:m.from==='user'?'flex-end':'flex-start',gap:8,marginBottom:14}}><div style={{width:30,height:30,borderRadius:'50%',display:'grid',placeItems:'center',background:m.from==='user'?'#dbeafe':'var(--primary-50)',color:m.from==='user'?'#2563eb':'var(--primary-600)',flex:'0 0 auto'}}>{m.from==='user'?<User size={15}/>:<Bot size={15}/>}</div><div style={{maxWidth:'78%',padding:'11px 14px',borderRadius:m.from==='user'?'16px 16px 4px 16px':'16px 16px 16px 4px',background:m.from==='user'?'var(--primary-500)':'#fff',color:m.from==='user'?'#fff':'var(--text-main)',boxShadow:'0 2px 8px rgba(0,0,0,.04)',whiteSpace:'pre-wrap'}}>{m.image&&<img src={m.image} alt="Attached" style={{maxWidth:220,maxHeight:160,borderRadius:10,display:'block',marginBottom:7}}/>}{m.text}</div></div>)}{loading&&<div style={{padding:'8px 45px',color:'var(--text-muted)'}}>Krushi AI is thinking...</div>}</div>
+    {image&&<div style={{padding:'.65rem 1rem',borderTop:'1px solid var(--border-light)',background:'#fff',display:'flex',alignItems:'center',gap:10}}><img src={image.url} alt="preview" style={{width:48,height:48,objectFit:'cover',borderRadius:8}}/><span style={{fontSize:'.8rem',flex:1}}>{image.name}</span><button type="button" onClick={()=>setImage(null)} className="btn btn-sm btn-outline"><X size={14}/></button></div>}
+    <form onSubmit={send} style={{padding:'1rem',background:'#fff',display:'flex',gap:8,alignItems:'center'}}><input ref={fileRef} type="file" accept="image/*" onChange={pickImage} style={{display:'none'}}/><button type="button" className="nav-icon-button" onClick={()=>fileRef.current?.click()} title="Attach image"><ImagePlus size={18}/></button><input value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Ask anything about farming..." style={{flex:1,minWidth:0}}/><button type="button" className="nav-icon-button" onClick={voice} title="Voice input">{listening?<MicOff size={18}/>:<Mic size={18}/>}</button><button className="btn btn-primary" type="submit" disabled={loading}><Send size={16}/> Ask</button></form>
+    <div style={{padding:'0 1rem 1rem',background:'#fff',fontSize:'.72rem',color:'var(--text-muted)'}}><Sprout size={12} style={{verticalAlign:'middle'}}/> For pesticides/medicine, confirm the final product and dose from its approved label or a local agriculture expert.</div>
+  </div></div></div>;
+};

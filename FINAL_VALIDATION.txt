@@ -1,0 +1,17 @@
+KrushiSevak Marketplace + Real Location Update
+
+Implemented:
+1. Farmer can save real GPS coordinates from browser using "Use My Current Location".
+2. GPS coordinates are stored in MongoDB User.location and attached to new crop listings.
+3. Crop listings support crop photos, price per unit, quantity and unit (kg/quintal/ton/bag).
+4. Customer Marketplace has "Use My Location" and radius filters (10/25/50/100/250 km).
+5. Nearby available farmer listings are calculated with Haversine distance and sorted nearest-first.
+6. Marketplace shows farmer, farm location, available quantity, price/unit, photo and distance.
+7. Customer can open Google Maps directions to the farmer's saved GPS location and call the farmer.
+8. Only Available crop listings are shown in the marketplace.
+9. Existing farmer marketplace purchase/cart flow remains available.
+10. Existing MongoDB connection/.env was not changed.
+
+Verification:
+- Backend JavaScript syntax checks passed.
+- Frontend dependency installation/build could not be completed in this environment because npm dependency installation timed out; no claim of a successful frontend build is made.
