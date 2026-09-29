@@ -6,7 +6,12 @@ Write-Host ""
 
 # Check if MongoDB is running
 Write-Host "Checking MongoDB connection..." -ForegroundColor Yellow
-$mongoCheck = Test-Connection -ComputerName localhost -Port 27017 -Count 1 -ErrorAction SilentlyContinue
+$mongoCheck = $null
+try {
+    $mongoCheck = Test-NetConnection -ComputerName localhost -Port 27017 -InformationLevel Quiet -WarningAction SilentlyContinue
+} catch {
+    $mongoCheck = $false
+}
 
 if (-not $mongoCheck) {
     Write-Host "WARNING: Cannot connect to MongoDB on port 27017" -ForegroundColor Red
