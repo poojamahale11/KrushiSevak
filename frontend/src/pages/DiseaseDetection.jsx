@@ -79,6 +79,8 @@ export const DiseaseDetection = () => {
               <div><span style={{ fontSize: '.8rem', color: '#15803d', fontWeight: 700 }}><CheckCircle2 size={15} style={{ verticalAlign: 'middle' }} /> ANALYSIS COMPLETE • {result.confidence}%</span><h3 style={{ color: '#b91c1c', margin: '.3rem 0' }}>{result.disease}</h3><span style={{ fontSize: '.85rem', color: 'var(--text-muted)' }}>Crop: <strong>{result.crop}</strong></span></div>
               <span className="stock-badge low-stock">{result.severity}</span>
             </div>
+            {result.annotatedImageUrl && <img src={result.annotatedImageUrl} alt="Model detections outlined on the uploaded crop image" style={{ width: '100%', maxHeight: 360, objectFit: 'contain', marginTop: 16, borderRadius: 8, background: '#f8fafc' }} />}
+            {result.detections?.length > 0 && <div style={{ marginTop: 12 }}><h4>Detected Objects</h4><ul>{result.detections.map((item, index) => <li key={`${item.className}-${index}`} style={{ marginBottom: 6 }}>{item.className} • {(item.confidence * 100).toFixed(1)}% confidence</li>)}</ul></div>}
             <h4 style={{ marginTop: 18 }}>Recommended Treatment</h4><ul>{result.treatment?.map((item, i) => <li key={i} style={{ marginBottom: 7 }}>{item}</li>)}</ul>
             <h4>Prevention</h4><ul>{result.prevention?.map((item, i) => <li key={i} style={{ marginBottom: 7 }}>{item}</li>)}</ul>
             <Link to="/krushi-seva-kendra" className="btn btn-sm btn-outline">Find Products in Kendra →</Link>
@@ -86,7 +88,7 @@ export const DiseaseDetection = () => {
 
           {history.length > 0 && <div style={{ maxWidth: 800, margin: '0 auto', textAlign: 'left' }}><h3><History size={20} style={{ verticalAlign: 'middle' }} /> My Detection History</h3>{history.slice(0, 5).map((item) => <div key={item._id} style={{ background: '#fff', border: '1px solid var(--border-light)', borderRadius: 12, padding: 12, marginBottom: 8, display: 'flex', justifyContent: 'space-between', gap: 10 }}><span><strong>{item.disease}</strong><br /><small>{item.originalFileName}</small></span><span>{item.confidence}%</span></div>)}</div>}
 
-          <div className="feature-preview-grid" style={{ marginTop: 35 }}><div className="feature-preview-card"><h4>📷 Gallery Upload</h4><p>Select an existing crop photo from mobile gallery or computer.</p></div><div className="feature-preview-card"><h4>🤖 AI-Ready API</h4><p>The backend has a dedicated model integration point for your team's trained AI model.</p></div><div className="feature-preview-card"><h4>📝 Detection History</h4><p>Every farmer's analysis is saved separately in MongoDB.</p></div></div>
+          <div className="feature-preview-grid" style={{ marginTop: 35 }}><div className="feature-preview-card"><h4>📷 Gallery Upload</h4><p>Select an existing crop photo from mobile gallery or computer.</p></div><div className="feature-preview-card"><h4>🤖 116-Class Plant Model</h4><p>YOLOv11 detects plant classes and marks detected objects in the uploaded image.</p></div><div className="feature-preview-card"><h4>📝 Detection History</h4><p>Every farmer's analysis is saved separately in MongoDB.</p></div></div>
         </div>
       </div>
     </div>

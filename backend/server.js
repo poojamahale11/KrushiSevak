@@ -1,5 +1,16 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+const crypto = require('crypto');
+
+if (!process.env.JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET must be configured in backend/.env when NODE_ENV=production.');
+  }
+
+  process.env.JWT_SECRET = crypto.randomBytes(32).toString('hex');
+  console.warn('JWT_SECRET is not configured; using a temporary development secret. Tokens will expire when the backend restarts.');
+}
+
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
