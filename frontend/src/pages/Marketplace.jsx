@@ -16,6 +16,10 @@ export const Marketplace = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
+  // Customer Location state
+  const [customerCoords, setCustomerCoords] = useState(null);
+  const [locationLabel, setLocationLabel] = useState('Detecting your location...');
+
   // Filter state
   const [cropSearch, setCropSearch] = useState('');
   const [selectedDistrict, setSelectedDistrict] = useState('All Maharashtra');
@@ -35,25 +39,32 @@ export const Marketplace = () => {
     return getTalukasForDistrict(selectedDistrict);
   }, [selectedDistrict]);
 
-  // Extract available crops from current listings
-  const availableCrops = useMemo(() => {
-    const crops = new Set();
-    allListings.forEach(listing => {
-      if (listing.cropName && listing.cropName.trim()) {
-        crops.add(listing.cropName.trim());
-      }
-    });
-    return Array.from(crops).sort();
-  }, [allListings]);
+  // Calculate distance between two coordinates (Haversine formula)
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
 
   // Load all crop listings from MongoDB
-  const loadListings = async () => {
+  const loadListings = async (coords = customerCoords) => {
     try {
       setLoading(true);
       setError('');
       
-      // Fetch all available listings
-      const res = await api.getCropListings({ status: 'Available' });
+      const queryParams = { status: 'Available' };
+      if (coords?.lat && coords?.lng) {
+        queryParams.lat = coords.lat;
+        queryParams.lng = coords.lng;
+      }
+      
+      const res = await api.getCropListings(queryParams);
       setAllListings(res.listings || []);
       
     } catch (e) {
@@ -65,15 +76,67 @@ export const Marketplace = () => {
     }
   };
 
-  // Load listings on component mount
+  // Detect Customer Location on Mount
   useEffect(() => {
-    loadListings();
-  }, []);
+    const userLat = user?.location?.lat;
+    const userLng = user?.location?.lng;
 
-  // Filter listings based on location hierarchy and crop search
+    if (userLat && userLng) {
+      const coords = { lat: Number(userLat), lng: Number(userLng) };
+      setCustomerCoords(coords);
+      setLocationLabel(user.district ? `Saved Profile Location (${user.district})` : 'Saved Farm/User Location');
+      loadListings(coords);
+    } else if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setCustomerCoords(coords);
+          setLocationLabel(`Live GPS (${pos.coords.latitude.toFixed(2)}°, ${pos.coords.longitude.toFixed(2)}°)`);
+          loadListings(coords);
+        },
+        () => {
+          const coords = { lat: 19.3951, lng: 74.6534 }; // Rahuri / Ahmednagar center
+          setCustomerCoords(coords);
+          setLocationLabel('Maharashtra Center (Rahuri / Ahmednagar)');
+          loadListings(coords);
+        },
+        { timeout: 8000 }
+      );
+    } else {
+      const coords = { lat: 19.3951, lng: 74.6534 };
+      setCustomerCoords(coords);
+      setLocationLabel('Maharashtra Center (Rahuri / Ahmednagar)');
+      loadListings(coords);
+    }
+  }, [user]);
+
+  // Extract available crops from current listings
+  const availableCrops = useMemo(() => {
+    const crops = new Set();
+    allListings.forEach(listing => {
+      if (listing.cropName && listing.cropName.trim()) {
+        crops.add(listing.cropName.trim());
+      }
+    });
+    return Array.from(crops).sort();
+  }, [allListings]);
+
+  // Filter listings & sort ALL matching results by distance (Nearest First)
   const filteredListings = useMemo(() => {
     let filtered = [...allListings];
     
+    // Filter by Crop Search
+    if (cropSearch.trim()) {
+      const searchLower = cropSearch.trim().toLowerCase();
+      filtered = filtered.filter(listing => 
+        (listing.cropName && listing.cropName.toLowerCase().includes(searchLower)) ||
+        (listing.category && listing.category.toLowerCase().includes(searchLower)) ||
+        (listing.farmerName && listing.farmerName.toLowerCase().includes(searchLower)) ||
+        (listing.village && listing.village.toLowerCase().includes(searchLower)) ||
+        (listing.district && listing.district.toLowerCase().includes(searchLower))
+      );
+    }
+
     // Filter by District
     if (selectedDistrict !== 'All Maharashtra') {
       filtered = filtered.filter(listing => 
@@ -89,20 +152,24 @@ export const Marketplace = () => {
         listing.taluka.toLowerCase() === selectedTaluka.toLowerCase()
       );
     }
-    
-    // Filter by Crop Search
-    if (cropSearch.trim()) {
-      const searchLower = cropSearch.trim().toLowerCase();
-      filtered = filtered.filter(listing => 
-        (listing.cropName && listing.cropName.toLowerCase().includes(searchLower)) ||
-        (listing.category && listing.category.toLowerCase().includes(searchLower)) ||
-        (listing.farmerName && listing.farmerName.toLowerCase().includes(searchLower)) ||
-        (listing.village && listing.village.toLowerCase().includes(searchLower))
-      );
-    }
+
+    // Calculate distance and SORT BY DISTANCE (nearest first)
+    const cLat = customerCoords?.lat || 19.3951;
+    const cLng = customerCoords?.lng || 74.6534;
+
+    filtered = filtered.map(listing => {
+      let d = listing.distanceKm;
+      if (d === undefined || d === null) {
+        const fLoc = listing.location || listing.farmer?.location || { lat: 19.3951, lng: 74.6534 };
+        d = Number(calculateDistance(cLat, cLng, fLoc.lat, fLoc.lng).toFixed(1));
+      }
+      return { ...listing, calculatedDistanceKm: d };
+    });
+
+    filtered.sort((a, b) => (a.calculatedDistanceKm ?? 9999) - (b.calculatedDistanceKm ?? 9999));
     
     return filtered;
-  }, [allListings, selectedDistrict, selectedTaluka, cropSearch]);
+  }, [allListings, selectedDistrict, selectedTaluka, cropSearch, customerCoords]);
 
   // Reset taluka when district changes
   useEffect(() => {
@@ -117,45 +184,16 @@ export const Marketplace = () => {
 
   // Google Maps directions URL
   const getDirectionsUrl = (listing) => {
-    const target = listing.location || listing.farmer?.location;
-    if (!target?.lat || !target?.lng) return '';
+    const target = listing.location || listing.farmer?.location || { lat: 19.3951, lng: 74.6534 };
     return `https://www.google.com/maps/dir/?api=1&destination=${target.lat},${target.lng}&travelmode=driving`;
-  };
-
-  // Calculate distance between two coordinates (Haversine formula)
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // Earth's radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c;
-    return distance;
   };
 
   // Get distance text for listing
   const getDistanceText = (listing) => {
-    if (!user?.location?.lat || !user?.location?.lng) return null;
-    const farmerLocation = listing.location || listing.farmer?.location;
-    if (!farmerLocation?.lat || !farmerLocation?.lng) return null;
-    
-    const distance = calculateDistance(
-      user.location.lat,
-      user.location.lng,
-      farmerLocation.lat,
-      farmerLocation.lng
-    );
-    
-    if (distance < 1) {
-      return `${(distance * 1000).toFixed(0)} meters away`;
-    } else if (distance < 10) {
-      return `${distance.toFixed(1)} km away`;
-    } else {
-      return `${Math.round(distance)} km away`;
-    }
+    const dist = listing.calculatedDistanceKm ?? listing.distanceKm;
+    if (dist === undefined || dist === null) return 'Nearby';
+    if (dist < 1) return `${(dist * 1000).toFixed(0)} m away`;
+    return `${dist} km away`;
   };
 
   // View farmer details modal
@@ -184,11 +222,43 @@ export const Marketplace = () => {
 
         {/* Search and Filters */}
         <div style={{ marginBottom: '2rem' }}>
+          {/* Customer Location Status Banner */}
+          <div style={{ marginBottom: '1rem', padding: '0.85rem 1.25rem', background: '#f0fdf4', borderRadius: 'var(--radius-md)', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap', color: '#166534' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', fontWeight: 650 }}>
+              <Navigation size={17} style={{ color: '#15803d' }} />
+              <span>
+                <strong>Customer Location:</strong> {locationLabel} &nbsp;•&nbsp; <span style={{ color: '#16a34a', fontWeight: 700 }}>Matching Crops Sorted Nearest First 📍</span>
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (navigator.geolocation) {
+                  setLocationLabel('Refreshing GPS location...');
+                  navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                      const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                      setCustomerCoords(coords);
+                      setLocationLabel(`Live GPS (${pos.coords.latitude.toFixed(2)}°, ${pos.coords.longitude.toFixed(2)}°)`);
+                      loadListings(coords);
+                    },
+                    () => {
+                      setLocationLabel('Location permission denied; using region default.');
+                    }
+                  );
+                }
+              }}
+              style={{ background: '#ffffff', border: '1px solid #86efac', color: '#15803d', padding: '0.3rem 0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Refresh GPS
+            </button>
+          </div>
+
           {/* Location Hierarchy Info */}
           <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', background: '#f0f9ff', borderRadius: 'var(--radius-md)', border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.88rem', color: '#0369a1' }}>
             <Info size={16} />
             <span>
-              <strong>Location Hierarchy:</strong> Maharashtra → District → Taluka → Farmers
+              <strong>Location Hierarchy:</strong> Customer GPS/Region → Search Crops → Results Sorted Nearest First (KM Distance)
             </span>
           </div>
 
@@ -381,6 +451,28 @@ export const Marketplace = () => {
                     </div>
                     <span className="crop-category-badge" style={{ position: 'absolute', top: '0.75rem', left: '0.75rem', background: '#16a34a', color: '#fff', border: 'none' }}>
                       {listing.category || 'Crops'}
+                    </span>
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '0.75rem',
+                        right: '0.75rem',
+                        background: 'rgba(15, 23, 42, 0.85)',
+                        color: '#38bdf8',
+                        backdropFilter: 'blur(4px)',
+                        padding: '0.25rem 0.65rem',
+                        borderRadius: '999px',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                        border: '1px solid rgba(56, 189, 248, 0.3)',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                      }}
+                    >
+                      <Navigation size={12} />
+                      {getDistanceText(listing)}
                     </span>
                   </div>
 

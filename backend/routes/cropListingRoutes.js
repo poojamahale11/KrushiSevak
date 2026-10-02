@@ -21,7 +21,8 @@ const upload = multer({
 router.get('/', getListings);
 router.get('/my-listings', protect, getMyListings);
 router.post('/', protect, createListing);
-router.post('/:id/images', protect, upload.array('images', 5), uploadListingImages); // Support up to 5 images
+router.post('/:id/image', protect, upload.any(), uploadListingImages);
+router.post('/:id/images', protect, upload.any(), uploadListingImages);
 router.put('/:id', protect, updateListing);
 router.delete('/:id', protect, deleteListing);
 module.exports = router;

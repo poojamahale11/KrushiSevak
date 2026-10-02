@@ -92,6 +92,11 @@ const userSchema = new mongoose.Schema(
       lat: { type: Number, min: -90, max: 90 },
       lng: { type: Number, min: -180, max: 180 },
     },
+    // Profile photo (URL or base64 string)
+    profileImage: {
+      type: String,
+      default: '',
+    },
   },
   {
     timestamps: true,

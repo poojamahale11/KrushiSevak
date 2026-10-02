@@ -4,6 +4,48 @@ const CropListing = require('../models/CropListing');
 const User = require('../models/User');
 const { geocodeAddress } = require('../utils/geocoding');
 
+const DISTRICT_COORDINATES = {
+  'ahmednagar': { lat: 19.0948, lng: 74.7480 },
+  'akola': { lat: 20.7002, lng: 77.0082 },
+  'amravati': { lat: 20.9374, lng: 77.7796 },
+  'aurangabad': { lat: 19.8762, lng: 75.3433 },
+  'chhatrapati sambhajinagar': { lat: 19.8762, lng: 75.3433 },
+  'beed': { lat: 18.9891, lng: 75.7601 },
+  'bhandara': { lat: 21.1705, lng: 79.6549 },
+  'buldhana': { lat: 20.5293, lng: 76.1843 },
+  'chandrapur': { lat: 19.9615, lng: 79.2961 },
+  'dhule': { lat: 20.9042, lng: 74.7749 },
+  'gadchiroli': { lat: 20.1849, lng: 80.0028 },
+  'gondia': { lat: 21.4624, lng: 80.1961 },
+  'hingoli': { lat: 19.7183, lng: 77.1479 },
+  'jalgaon': { lat: 21.0077, lng: 75.5626 },
+  'jalna': { lat: 19.8347, lng: 75.8816 },
+  'kolhapur': { lat: 16.7050, lng: 74.2433 },
+  'latur': { lat: 18.4088, lng: 76.5604 },
+  'mumbai': { lat: 18.9388, lng: 72.8353 },
+  'mumbai suburban': { lat: 19.1176, lng: 72.8631 },
+  'nagpur': { lat: 21.1458, lng: 79.0882 },
+  'nanded': { lat: 19.1383, lng: 77.3210 },
+  'nandurbar': { lat: 21.3712, lng: 74.2400 },
+  'nashik': { lat: 19.9975, lng: 73.7898 },
+  'dharashiv': { lat: 18.1861, lng: 76.0419 },
+  'osmanabad': { lat: 18.1861, lng: 76.0419 },
+  'palghar': { lat: 19.6936, lng: 72.7655 },
+  'parbhani': { lat: 19.2686, lng: 76.7712 },
+  'pune': { lat: 18.5204, lng: 73.8567 },
+  'raigad': { lat: 18.5158, lng: 73.1822 },
+  'ratnagiri': { lat: 16.9902, lng: 73.3120 },
+  'sangli': { lat: 16.8524, lng: 74.5815 },
+  'satara': { lat: 17.6805, lng: 74.0183 },
+  'sindhudurg': { lat: 16.1246, lng: 73.6913 },
+  'solapur': { lat: 17.6599, lng: 75.9064 },
+  'thane': { lat: 19.2183, lng: 72.9781 },
+  'wardha': { lat: 20.7453, lng: 78.6022 },
+  'washim': { lat: 20.1107, lng: 77.1342 },
+  'yavatmal': { lat: 20.3888, lng: 78.1204 },
+  'rahuri': { lat: 19.3951, lng: 74.6534 }
+};
+
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const distanceKm = (lat1, lon1, lat2, lon2) => {
@@ -16,46 +58,74 @@ const distanceKm = (lat1, lon1, lat2, lon2) => {
 
 const getListings = async (req, res, next) => {
   try {
-    const { search, district, taluka, status = 'Available', lat, lng, radius = 100 } = req.query;
+    const { search, district, taluka, status = 'Available', lat, lng } = req.query;
     
-    // Auto-expire listings
+    // Auto-expire listings only if they have a valid past expiry date set
     const now = new Date();
     await CropListing.updateMany(
-      { expiryDate: { $lt: now }, isActive: true },
+      { expiryDate: { $ne: null, $type: 'date', $lt: now }, isActive: true },
       { isActive: false, status: 'Expired' }
+    );
+    
+    // Restore any active listings where expiry date is null/missing or in the future
+    await CropListing.updateMany(
+      { $or: [{ expiryDate: null }, { expiryDate: { $gt: now } }], status: 'Expired' },
+      { isActive: true, status: 'Available' }
     );
     
     const filter = { isActive: true }; // Only show active listings
     if (status && status !== 'All') filter.status = status;
-    if (district && district !== 'All') filter.district = new RegExp(`^${escapeRegex(district.trim())}$`, 'i');
+    if (district && district !== 'All' && district !== 'All Maharashtra') filter.district = new RegExp(`^${escapeRegex(district.trim())}$`, 'i');
     if (taluka && taluka !== 'All') filter.taluka = new RegExp(`^${escapeRegex(taluka.trim())}$`, 'i');
     if (search && search.trim()) {
       const r = new RegExp(escapeRegex(search.trim()), 'i');
-      filter.$or = [{ cropName: r }, { farmerName: r }, { village: r }, { taluka: r }, { district: r }];
+      filter.$or = [
+        { cropName: r }, 
+        { category: r },
+        { farmerName: r }, 
+        { village: r }, 
+        { taluka: r }, 
+        { district: r },
+        { description: r }
+      ];
     }
 
-    const hasLocation = Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
-    const maxRadius = Math.min(Math.max(Number(radius) || 100, 1), 500);
+    const customerLat = Number.isFinite(Number(lat)) ? Number(lat) : null;
+    const customerLng = Number.isFinite(Number(lng)) ? Number(lng) : null;
+    const hasCustomerLocation = customerLat !== null && customerLng !== null;
+
     const listings = await CropListing.find(filter)
-      .populate('farmer', 'name mobile village taluka district location landSize crops')
+      .populate('farmer', 'name mobile village taluka district location landSize crops profileImage')
       .sort({ createdAt: -1 });
 
     const enriched = listings.map((listing) => {
       const item = listing.toObject();
-      const coords = item.location || item.farmer?.location;
-      if (hasLocation && coords && Number.isFinite(Number(coords.lat)) && Number.isFinite(Number(coords.lng))) {
-        item.distanceKm = Number(distanceKm(Number(lat), Number(lng), Number(coords.lat), Number(coords.lng)).toFixed(1));
+      let coords = item.location || item.farmer?.location;
+      if (!coords || !coords.lat || !coords.lng) {
+        const distKey = (item.district || '').toLowerCase();
+        coords = DISTRICT_COORDINATES[distKey] || { lat: 19.3951, lng: 74.6534 };
+        item.location = coords;
+      }
+
+      if (hasCustomerLocation) {
+        item.distanceKm = Number(distanceKm(customerLat, customerLng, Number(coords.lat), Number(coords.lng)).toFixed(1));
       } else {
         item.distanceKm = null;
       }
       return item;
     });
 
-    const result = hasLocation
-      ? enriched.filter((item) => item.distanceKm !== null && item.distanceKm <= maxRadius).sort((a, b) => a.distanceKm - b.distanceKm)
+    // Sort ALL matching listings by distance (nearest first) if customer location is provided
+    const result = hasCustomerLocation
+      ? enriched.sort((a, b) => (a.distanceKm ?? 99999) - (b.distanceKm ?? 99999))
       : enriched;
 
-    res.json({ success: true, count: result.length, listings: result, locationFilterApplied: hasLocation, radiusKm: hasLocation ? maxRadius : null });
+    res.json({
+      success: true,
+      count: result.length,
+      listings: result,
+      customerLocation: hasCustomerLocation ? { lat: customerLat, lng: customerLng } : null
+    });
   } catch (e) { next(e); }
 };
 
@@ -69,40 +139,41 @@ const getMyListings = async (req, res, next) => {
 const createListing = async (req, res, next) => {
   try {
     if (req.user.role !== 'farmer') return res.status(403).json({ success: false, message: 'Only farmers can create crop listings' });
-    const { cropName, category, quantity, unit, pricePerUnit, quality, harvestDate, expiryDate, description } = req.body;
+    const { cropName, category, quantity, unit, pricePerUnit, quality, harvestDate, expiryDate, description, village, taluka, district } = req.body;
     if (!cropName || !quantity || pricePerUnit === undefined) return res.status(400).json({ success: false, message: 'Crop name, quantity and price are required' });
     
     const farmer = await User.findById(req.user._id);
     if (!farmer) return res.status(404).json({ success: false, message: 'Farmer not found' });
     
-    // Use farmer's existing location, or try to geocode if not available
+    const cropVillage = (village || farmer.village || '').trim();
+    const cropTaluka = (taluka || farmer.taluka || '').trim();
+    const cropDistrict = (district || farmer.district || '').trim();
+
     let listingLocation = undefined;
     
     if (farmer.location && Number.isFinite(Number(farmer.location.lat)) && Number.isFinite(Number(farmer.location.lng))) {
       listingLocation = { lat: Number(farmer.location.lat), lng: Number(farmer.location.lng) };
-      console.log(`Using farmer's saved location: ${listingLocation.lat}, ${listingLocation.lng}`);
-    } else if (farmer.village || farmer.taluka || farmer.district) {
+    } else if (cropVillage || cropTaluka || cropDistrict) {
       try {
-        console.log(`Geocoding listing location for: ${farmer.village}, ${farmer.taluka}, ${farmer.district}`);
         const geocoded = await geocodeAddress({
-          village: farmer.village,
-          taluka: farmer.taluka,
-          district: farmer.district,
+          village: cropVillage,
+          taluka: cropTaluka,
+          district: cropDistrict,
           state: 'Maharashtra',
           country: 'India'
         });
         
         if (geocoded && geocoded.lat && geocoded.lng) {
           listingLocation = { lat: geocoded.lat, lng: geocoded.lng };
-          console.log(`Geocoded listing location: ${geocoded.lat}, ${geocoded.lng}`);
-          farmer.location = listingLocation;
-          await farmer.save();
-        } else {
-          console.log('Geocoding failed for listing - location will not be available');
         }
       } catch (geocodeError) {
         console.error('Geocoding error for listing:', geocodeError.message);
       }
+    }
+
+    if (!listingLocation) {
+      const distKey = cropDistrict.toLowerCase();
+      listingLocation = DISTRICT_COORDINATES[distKey] || { lat: 19.3951, lng: 74.6534 };
     }
     
     // Parse expiry date
@@ -126,12 +197,13 @@ const createListing = async (req, res, next) => {
       harvestDate: harvestDate || '',
       expiryDate: parsedExpiryDate,
       description: description || '',
-      village: farmer.village || '',
-      taluka: farmer.taluka || '',
-      district: farmer.district || '',
+      village: cropVillage || farmer.village || '',
+      taluka: cropTaluka || farmer.taluka || '',
+      district: cropDistrict || farmer.district || '',
       contact: farmer.mobile || '',
       location: listingLocation,
-      images: [], // Will be populated by uploadListingImages
+      imageUrl: req.body.imageUrl || '',
+      images: req.body.imageUrl ? [req.body.imageUrl] : (Array.isArray(req.body.images) ? req.body.images : []),
       isActive: true
     });
     
@@ -186,32 +258,16 @@ const uploadListingImages = async (req, res, next) => {
     if (!listing) return res.status(404).json({ success: false, message: 'Listing not found' });
     if (listing.farmer.toString() !== req.user._id.toString()) return res.status(403).json({ success: false, message: 'Not authorized' });
     
-    if (!req.files || req.files.length === 0) {
+    const files = (req.files && req.files.length > 0) ? req.files : (req.file ? [req.file] : []);
+    
+    if (files.length === 0) {
       return res.status(400).json({ success: false, message: 'At least one crop photo is required' });
     }
     
-    // Limit to 5 images
-    const files = req.files.slice(0, 5);
-    const newImages = files.map(file => `/uploads/crops/${file.filename}`);
-    
-    // Add new images to the array
+    const newImages = files.slice(0, 5).map(file => `/uploads/crops/${file.filename}`);
     listing.images = [...(listing.images || []), ...newImages];
-    
-    // Keep only the last 5 images
-    if (listing.images.length > 5) {
-      const oldImages = listing.images.slice(0, listing.images.length - 5);
-      // Delete old images from filesystem
-      oldImages.forEach(imgPath => {
-        const fullPath = path.join(__dirname, '..', imgPath.replace(/^\//, ''));
-        if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
-      });
-      listing.images = listing.images.slice(-5);
-    }
-    
-    // Set first image as main imageUrl for backward compatibility
-    if (listing.images.length > 0 && !listing.imageUrl) {
-      listing.imageUrl = listing.images[0];
-    }
+    if (listing.images.length > 5) listing.images = listing.images.slice(-5);
+    if (newImages.length > 0) listing.imageUrl = newImages[0];
     
     await listing.save();
     res.json({ success: true, message: `${files.length} crop photo(s) uploaded`, listing, imagesUploaded: files.length });

@@ -82,7 +82,14 @@ export const Navbar = () => {
         <div className="lang-selector"><Globe size={15} /><select value={lang} onChange={e => setLang(e.target.value)} aria-label="Language"><option value="en">EN</option><option value="hi">हि</option><option value="mr">मर</option></select></div>
         {isAuthenticated ? <>
           <Link to="/notifications" className="nav-icon-button" title="Notifications"><Bell size={18} />{unreadCount > 0 && <span className="notification-dot">{unreadCount > 9 ? '9+' : unreadCount}</span>}</Link>
-          <Link to={getRoleDashboardPath(role)} className="btn btn-sm btn-primary nav-dashboard"><LayoutDashboard size={15} /><span>{t('dashboard')}</span></Link>
+          <Link to={getRoleDashboardPath(role)} className="btn btn-sm btn-primary nav-dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+            {user?.profileImage ? (
+              <img src={user.profileImage} alt="Avatar" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', border: '1.5px solid #ffffff' }} />
+            ) : (
+              <LayoutDashboard size={15} />
+            )}
+            <span>{t('dashboard')}</span>
+          </Link>
           <button onClick={handleLogout} className="btn btn-sm btn-danger-outline nav-logout"><LogOut size={15} /><span>{t('logout')}</span></button>
         </> : <><Link to="/login" className="btn btn-sm btn-outline">{t('login')}</Link><Link to="/register" className="btn btn-sm btn-primary">{t('register')}</Link></>}
         <button className="mobile-menu-toggle" onClick={() => setMobileMenuOpen(v => !v)} aria-label="Toggle menu">{mobileMenuOpen ? <X size={23} /> : <Menu size={23} />}</button>

@@ -27,25 +27,28 @@ export const Home = () => {
 
   return (
     <div>
-      {/* 1. Hero Section */}
-      <section className="hero-section" style={{ background: 'linear-gradient(180deg, #edf7f0 0%, #f6f8f6 100%)', padding: '4rem 0 3.5rem' }}>
-        <div className="container">
-          <div className="hero-grid">
-            <div>
-              <div className="hero-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', background: '#d6edd9', color: '#1b4332', padding: '0.35rem 0.85rem', borderRadius: 'var(--radius-full)', fontSize: '0.85rem', fontWeight: 700, marginBottom: '1.25rem', border: '1px solid #addbb5' }}>
+      {/* 1. Full Background Photo Hero Section with Bright Natural Lighting */}
+      <section className="hero-bg-section">
+        <div className="hero-bg-overlay"></div>
+        <div className="container" style={{ position: 'relative', zIndex: 2 }}>
+          <div className="hero-content-wrapper">
+            <div className="hero-glass-panel">
+              <div className="hero-tag-light">
                 <Sprout size={16} />
                 <span>{t('heroBadge')}</span>
               </div>
-              <h1 className="hero-title" style={{ fontSize: '2.75rem', marginBottom: '1.25rem', lineHeight: 1.2 }}>
+              
+              <h1 className="hero-title-light">
                 {t('heroTitle1')}
-                <span style={{ color: 'var(--primary-500)', display: 'block' }}>{t('heroTitle2')}</span>
+                <span className="hero-gold-span">{t('heroTitle2')}</span>
               </h1>
-              <p className="hero-desc" style={{ fontSize: '1.1rem', color: 'var(--text-body)', lineHeight: 1.6, marginBottom: '2rem', maxWidth: '540px' }}>
+
+              <p className="hero-desc-light">
                 {t('heroDesc')}
               </p>
 
-              {/* Action Buttons: Get Started, Login, Explore, Detect Crop Disease */}
-              <div className="hero-cta" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '2.5rem' }}>
+              {/* Hero Action Buttons */}
+              <div className="hero-cta-group">
                 {isAuthenticated ? (
                   <Link to={getRoleDashboardPath(user?.role)} className="btn btn-primary btn-lg">
                     <span>{t('dashboard')} ({t(user?.role)})</span>
@@ -57,99 +60,64 @@ export const Home = () => {
                       <span>{t('heroCtaPrimary')}</span>
                       <ArrowRight size={18} />
                     </Link>
-                    <Link to="/login" className="btn btn-outline btn-lg">
+                    <Link to="/login" className="btn btn-hero-glass btn-lg">
                       {t('heroCtaLogin')}
                     </Link>
                   </>
                 )}
-                <Link to="/disease-detection" className="btn btn-secondary btn-lg" style={{ background: '#dcfce7', color: '#166534', borderColor: '#bbf7d0' }}>
+                <Link to="/disease-detection" className="btn btn-hero-emerald btn-lg">
                   <Sparkles size={18} />
                   <span>{t('heroCtaDisease')}</span>
                 </Link>
-                <Link to="/crop-area-data" className="btn btn-secondary btn-lg">
+                <Link to="/crop-area-data" className="btn btn-hero-glass btn-lg">
                   <TrendingUp size={18} />
                   <span>{t('heroCtaCropData')}</span>
                 </Link>
               </div>
 
-              {/* Platform Metrics Counter */}
-              <div className="hero-stats" style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', paddingTop: '1.5rem', borderTop: '1px solid var(--border-light)' }}>
-                <div className="stat-item">
-                  <h4 style={{ fontSize: '1.5rem', color: 'var(--primary-600)' }}>500+ 🌾</h4>
-                  <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>{t('statFarmers')}</p>
+              {/* Hero Platform Metrics */}
+              <div className="hero-stats-light">
+                <div className="stat-item-light">
+                  <h4>500+ 🌾</h4>
+                  <p>{t('statFarmers')}</p>
                 </div>
-                <div className="stat-item">
-                  <h4 style={{ fontSize: '1.5rem', color: '#0288d1' }}>120+ 🏪</h4>
-                  <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>{t('statStores')}</p>
+                <div className="stat-item-light">
+                  <h4>120+ 🏪</h4>
+                  <p>{t('statStores')}</p>
                 </div>
-                <div className="stat-item">
-                  <h4 style={{ fontSize: '1.5rem', color: '#d97706' }}>3,500+ 📍</h4>
-                  <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>{t('statAcreage')}</p>
+                <div className="stat-item-light">
+                  <h4>3,500+ 📍</h4>
+                  <p>{t('statAcreage')}</p>
                 </div>
-              </div>
-            </div>
-
-            {/* Visual Agro-Intelligence Showcase Card */}
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <div
-                style={{
-                  background: 'linear-gradient(145deg, #ffffff, #f2f9f4)',
-                  border: '1px solid #cce5d4',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '2.25rem',
-                  boxShadow: 'var(--shadow-lg)',
-                  width: '100%',
-                  maxWidth: '460px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1.5rem' }}>
-                  <div className="brand-icon-wrap" style={{ width: '50px', height: '50px', background: 'linear-gradient(135deg, #2d6a4f, #1b4332)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                    <Sprout size={28} />
-                  </div>
-                  <div>
-                    <h3 style={{ fontSize: '1.25rem', color: 'var(--text-main)' }}>KrushiSevak Unified</h3>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Empowering Indian Agriculture</p>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#fff', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
-                    <CloudSun size={24} style={{ color: '#0288d1' }} />
-                    <div>
-                      <strong style={{ fontSize: '0.9rem', display: 'block', color: 'var(--text-main)' }}>Live Agro-Meteorology</strong>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Village weather, humidity & spray advisories</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#fff', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
-                    <Activity size={24} style={{ color: '#e76f51' }} />
-                    <div>
-                      <strong style={{ fontSize: '0.9rem', display: 'block', color: 'var(--text-main)' }}>AI Plant Doctor & Free Treatment</strong>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Scan leaf blight, pests & instant remedies</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#fff', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
-                    <Store size={24} style={{ color: '#d97706' }} />
-                    <div>
-                      <strong style={{ fontSize: '0.9rem', display: 'block', color: 'var(--text-main)' }}>Krushi Seva Kendra Stocks</strong>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Certified seeds, urea & subsidized fertilizers</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#fff', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
-                    <TrendingUp size={24} style={{ color: 'var(--primary-500)' }} />
-                    <div>
-                      <strong style={{ fontSize: '0.9rem', display: 'block', color: 'var(--text-main)' }}>Crop & Area Analytics</strong>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>District acreage, top crops & farmer directory</span>
-                    </div>
-                  </div>
+                <div className="stat-item-light">
+                  <h4>99.4% ✨</h4>
+                  <p>Fair Trade Verified</p>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      {/* Live Agricultural Alert & Advisory Ticker */}
+      <div className="agri-ticker-bar">
+        <div className="container">
+          <div className="agri-ticker-inner">
+            <div className="agri-ticker-item">
+              <Sparkles size={16} style={{ color: '#ebd37d' }} />
+              <strong>Daily Mandi Update:</strong> Soyabean ₹4,850/qtl • Onion ₹2,400/qtl • Wheat ₹2,250/qtl
+            </div>
+            <div className="agri-ticker-item">
+              <CloudSun size={16} style={{ color: '#38bdf8' }} />
+              <strong>Weather Alert:</strong> Ideal soil humidity window active for Nashik & Ahmednagar districts.
+            </div>
+            <div className="agri-ticker-item">
+              <ShieldCheck size={16} style={{ color: '#4ade80' }} />
+              <strong>Agri Doctor Tip:</strong> Scan leaf photos on AI Disease Doctor for free treatment prescriptions.
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* 2. Key Benefits & Free Diagnosis Concept */}
       <section className="section-py" style={{ background: '#ffffff' }}>
@@ -271,15 +239,31 @@ export const Home = () => {
         </div>
       </section>
 
-      {/* 4. Agricultural Quotes Banner */}
-      <section className="container">
-        <div className="quote-banner">
-          <Quote size={32} style={{ color: 'var(--accent-gold)', marginBottom: '0.75rem' }} />
-          <h3>{t('agriQuote1')}</h3>
-          <p style={{ marginBottom: '1.5rem' }}>— {t('agriQuote1Author')}</p>
-          <div style={{ width: '60px', height: '2px', background: '#2d6a4f', margin: '1rem auto' }}></div>
-          <h4 style={{ color: '#d6edd9', fontStyle: 'italic', fontSize: '1.15rem' }}>{t('agriQuote2')}</h4>
-          <p style={{ fontSize: '0.85rem' }}>— {t('agriQuote2Author')}</p>
+      {/* 4. Agricultural Quotes Banner - Separate Cards */}
+      <section className="container" style={{ margin: '3rem auto' }}>
+        <div className="quote-banner-grid">
+          {/* Separate Box 1: Text Quotes */}
+          <div className="quote-card-text">
+            <Quote size={36} style={{ color: 'var(--accent-gold)', marginBottom: '1rem' }} />
+            <div className="quote-item">
+              <h3>{t('agriQuote1')}</h3>
+              <p>— {t('agriQuote1Author')}</p>
+            </div>
+            <div className="quote-divider"></div>
+            <div className="quote-item">
+              <h4>{t('agriQuote2')}</h4>
+              <p>— {t('agriQuote2Author')}</p>
+            </div>
+          </div>
+
+          {/* Separate Box 2: Farmer Image */}
+          <div className="quote-card-image">
+            <img 
+              src="/farmer-tech.jpg" 
+              alt="Farmer using smartphone in crop field" 
+              className="quote-banner-image"
+            />
+          </div>
         </div>
       </section>
 

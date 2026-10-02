@@ -41,18 +41,9 @@ export const CreateListingModal = ({ isOpen, onClose, onSubmit, user }) => {
       return;
     }
 
-    if (listingImages.length < 5) {
-      setError('Please upload at least 5 images of your crop');
-      return;
-    }
-
-    if (!listingForm.expiryDate) {
-      setError('Please set an expiry date for this listing');
-      return;
-    }
-
-    if (!user?.location) {
-      setError('Please save your farm location first before creating a listing');
+    // Optional image check (upload at least 1 if available)
+    if (listingImages.length > 5) {
+      setError('Maximum 5 images allowed');
       return;
     }
 

@@ -16,11 +16,12 @@ const updateUserProfile = async (req, res, next) => {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     
-    const { name, mobile, address, village, taluka, district, landSize, crops, shopName, shopAddress, shopContact } = req.body;
+    const { name, mobile, address, village, taluka, district, landSize, crops, shopName, shopAddress, shopContact, profileImage } = req.body;
     
     if (name) user.name = name.trim();
     if (mobile) user.mobile = mobile.trim();
     if (address !== undefined) user.address = address.trim();
+    if (profileImage !== undefined) user.profileImage = profileImage;
     
     // Handle role-specific fields
     if (user.role === 'farmer') {
