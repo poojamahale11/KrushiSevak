@@ -31,9 +31,15 @@ async function request(endpoint, options = {}) {
         console.error('JSON Parse Error:', parseError);
         throw new Error('Server returned invalid JSON response');
       }
-    } else {
-      data = { success: false, message: 'Server returned non-JSON response' };
-    }
+    }  else {
+  const text = await response.text();
+  console.error('Backend response:', response.status, text);
+
+  data = {
+    success: false,
+    message: `Server returned non-JSON response. Status: ${response.status}. Response: ${text.slice(0, 200)}`
+  };
+}
 
     if (!response.ok) {
       const error = new Error(
