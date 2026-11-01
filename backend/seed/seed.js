@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Crop = require('../models/Crop');
+const CropListing = require('../models/CropListing');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
 
@@ -116,6 +117,7 @@ const seedDatabase = async () => {
     const userIds = existingUsers.map((u) => u._id);
 
     await Crop.deleteMany({ farmer: { $in: userIds } });
+    await CropListing.deleteMany({ farmer: { $in: userIds } });
     await Product.deleteMany({ storeOwner: { $in: userIds } });
     await Order.deleteMany({ customer: { $in: userIds } });
     await User.deleteMany({ email: { $in: emails } });
@@ -369,6 +371,9 @@ const seedDatabase = async () => {
 
     const insertedCrops = await Crop.insertMany(cropsToSeed);
     console.log(` Inserted ${insertedCrops.length} farm crop records.`);
+
+    // Note: Marketplace crop listings are NOT seeded here to ensure only real registered farmers' data is present.
+    console.log(' Marketplace listings preserved for registered farmers only.');
 
     // 4. Seed Products for Store Owner (Vijay)
     const productsToSeed = [

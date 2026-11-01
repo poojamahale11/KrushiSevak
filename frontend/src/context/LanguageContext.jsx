@@ -1,31 +1,36 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { translations } from '../utils/translations';
+import React, { createContext, useContext, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const LanguageContext = createContext();
 
 export const LanguageProvider = ({ children }) => {
-  const [lang, setLang] = useState(() => {
-    return localStorage.getItem('krushisevak_lang') || 'en';
-  });
-
+  const { i18n, t } = useTranslation();
+  
+  // Sync with existing localStorage key on mount
   useEffect(() => {
-    localStorage.setItem('krushisevak_lang', lang);
-    document.documentElement.lang = lang;
-  }, [lang]);
-
-  const t = (key) => {
-    const activeDict = translations[lang] || translations.en;
-    return activeDict[key] || translations.en[key] || key;
-  };
+    const savedLang = localStorage.getItem('krushisevak_lang') || localStorage.getItem('language');
+    if (savedLang && ['en', 'hi', 'mr'].includes(savedLang)) {
+      i18n.changeLanguage(savedLang);
+    }
+  }, [i18n]);
 
   const changeLanguage = (newLang) => {
     if (['en', 'hi', 'mr'].includes(newLang)) {
-      setLang(newLang);
+      i18n.changeLanguage(newLang);
+      localStorage.setItem('krushisevak_lang', newLang);
+      localStorage.setItem('language', newLang);
+      document.documentElement.lang = newLang;
     }
   };
 
   return (
-    <LanguageContext.Provider value={{ lang, setLang: changeLanguage, t }}>
+    <LanguageContext.Provider 
+      value={{ 
+        lang: i18n.language, 
+        setLang: changeLanguage, 
+        t 
+      }}
+    >
       {children}
     </LanguageContext.Provider>
   );

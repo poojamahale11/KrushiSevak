@@ -1,0 +1,28 @@
+🚨 URGENT: Save Farmer Images Here
+
+You uploaded 2 farmer images in chat:
+
+1. IMAGE 1: Farmer in PINK/RED shirt with GREEN GRAPES in vineyard
+   → Save as: farmer1-ramesh-banner.jpg
+
+2. IMAGE 2: Farmer in WHITE shirt with VEGETABLE CRATES
+   → Save as: farmer2-bhausaheb-banner.jpg (or use for any other testimonial)
+
+HOW TO SAVE FROM CHAT:
+
+1. Scroll up in Kiro chat
+2. Find the grape farmer image (pink shirt, green grapes)
+3. Right-click on image
+4. Click "Save Image As..."
+5. Navigate to this folder: frontend/public/images/
+6. Name it EXACTLY: farmer1-ramesh-banner.jpg
+7. Click Save
+
+THEN:
+
+8. Refresh browser: Ctrl + Shift + R
+9. Go to http://localhost:5173
+10. Scroll to "Voices from the Field"
+11. Image should appear in Ramesh Patil card!
+
+Current Status: Code is READY ✅, Images NOT saved yet ⚠️

@@ -19,16 +19,20 @@ export const CreateListingModal = ({ isOpen, onClose, onSubmit, user }) => {
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files || []);
-    if (files.length < 5) {
-      setError('Please select at least 5 images');
-      return;
-    }
-    if (files.length > 5) {
-      setError('Maximum 5 images allowed');
-      return;
-    }
+    if (!files.length) return;
     setError('');
-    setListingImages(files);
+    setListingImages(prev => {
+      const combined = [...prev, ...files];
+      if (combined.length > 5) {
+        setError('Maximum 5 images allowed per listing. Keeping the first 5.');
+        return combined.slice(0, 5);
+      }
+      return combined;
+    });
+  };
+
+  const handleRemoveImage = (indexToRemove) => {
+    setListingImages(prev => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
   const handleSubmit = async (e) => {
@@ -41,9 +45,13 @@ export const CreateListingModal = ({ isOpen, onClose, onSubmit, user }) => {
       return;
     }
 
-    // Optional image check (upload at least 1 if available)
+    if (listingImages.length < 1) {
+      setError('Please upload at least 1 crop photo (maximum 5 allowed).');
+      return;
+    }
+
     if (listingImages.length > 5) {
-      setError('Maximum 5 images allowed');
+      setError('Maximum 5 crop images allowed per listing.');
       return;
     }
 
@@ -244,18 +252,35 @@ export const CreateListingModal = ({ isOpen, onClose, onSubmit, user }) => {
 
           {/* Images Upload */}
           <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-            <label className="form-label">Crop Images (5 required) *</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+              <label className="form-label" style={{ margin: 0, fontWeight: 700 }}>
+                Crop Quality Photos (1 to 5 Photos, min 1 required) *
+              </label>
+              <span style={{
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                padding: '0.15rem 0.6rem',
+                borderRadius: '999px',
+                background: (listingImages.length >= 1 && listingImages.length <= 5) ? '#dcfce7' : '#fef3c7',
+                color: (listingImages.length >= 1 && listingImages.length <= 5) ? '#166534' : '#92400e',
+                border: `1px solid ${(listingImages.length >= 1 && listingImages.length <= 5) ? '#86efac' : '#fde68a'}`
+              }}>
+                {listingImages.length === 0
+                  ? '⚠️ Photo required (0/5)'
+                  : listingImages.length <= 5
+                    ? `✓ ${listingImages.length}/5 photos selected`
+                    : `⚠️ Max 5 allowed (${listingImages.length}/5)`}
+              </span>
+            </div>
             <input
               className="form-input"
               type="file"
               accept="image/jpeg,image/jpg,image/png,image/webp"
               multiple
-              required
               onChange={handleImageChange}
             />
-            <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-              Select exactly 5 images (JPG/PNG/WEBP, max 7 MB each)
-              {listingImages.length > 0 && ` - ${listingImages.length} image(s) selected ✓`}
+            <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem', display: 'block' }}>
+              Select 1 to 5 clear photos of your harvest (close-ups, batch volume, quality grade, packaging). Minimum 1 photo required.
             </small>
           </div>
 
@@ -272,39 +297,87 @@ export const CreateListingModal = ({ isOpen, onClose, onSubmit, user }) => {
           </div>
         </div>
 
-        {/* Image Preview */}
+        {/* Image Preview Grid */}
         {listingImages.length > 0 && (
-          <div style={{ marginTop: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px' }}>
-            <p style={{ fontSize: '.85rem', fontWeight: 600, marginBottom: '.5rem' }}>
-              Selected Images ({listingImages.length}/5):
-            </p>
+          <div style={{ marginTop: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+              <p style={{ fontSize: '.85rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
+                Selected Crop Photos ({listingImages.length}):
+              </p>
+              {listingImages.length < 5 && (
+                <span style={{ fontSize: '0.78rem', color: '#b45309', fontWeight: 600 }}>
+                  Please add {5 - listingImages.length} more photo{5 - listingImages.length > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
-              gap: '.5rem'
+              gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
+              gap: '.6rem'
             }}>
               {listingImages.map((img, idx) => (
                 <div
                   key={idx}
                   style={{
+                    position: 'relative',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    gap: '.3rem',
                     padding: '.5rem',
                     background: '#fff',
                     borderRadius: '8px',
-                    border: '1px solid #e5e7eb'
+                    border: idx === 0 ? '2px solid #16a34a' : '1px solid #e5e7eb'
                   }}
                 >
-                  <ImageIcon size={16} style={{ color: 'var(--primary-500)' }} />
                   <span style={{
-                    fontSize: '.7rem',
+                    position: 'absolute',
+                    top: '4px',
+                    left: '4px',
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
+                    background: idx === 0 ? '#16a34a' : '#475569',
+                    color: '#fff',
+                    borderRadius: '4px',
+                    padding: '0.1rem 0.35rem'
+                  }}>
+                    {idx === 0 ? 'Primary' : `#${idx + 1}`}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveImage(idx)}
+                    style={{
+                      position: 'absolute',
+                      top: '4px',
+                      right: '4px',
+                      background: '#fee2e2',
+                      color: '#ef4444',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: '20px',
+                      height: '20px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: 800
+                    }}
+                    title="Remove photo"
+                  >
+                    ×
+                  </button>
+                  <div style={{ margin: '1.2rem 0 0.3rem', color: 'var(--primary-600)' }}>
+                    <ImageIcon size={22} />
+                  </div>
+                  <span style={{
+                    fontSize: '.68rem',
                     textAlign: 'center',
                     wordBreak: 'break-word',
-                    maxWidth: '100px'
+                    maxWidth: '100px',
+                    color: 'var(--text-main)',
+                    fontWeight: 500
                   }}>
-                    {img.name.length > 15 ? img.name.substring(0, 15) + '...' : img.name}
+                    {img.name.length > 12 ? img.name.substring(0, 12) + '...' : img.name}
                   </span>
                 </div>
               ))}

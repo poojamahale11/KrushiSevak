@@ -1,6 +1,50 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { geocodeAddress } = require('../utils/geocoding');
+
+const DISTRICT_COORDINATES = {
+  'ahmednagar': { lat: 19.0948, lng: 74.7480 },
+  'akola': { lat: 20.7002, lng: 77.0082 },
+  'amravati': { lat: 20.9374, lng: 77.7796 },
+  'aurangabad': { lat: 19.8762, lng: 75.3433 },
+  'chhatrapati sambhajinagar': { lat: 19.8762, lng: 75.3433 },
+  'sambhajinagar': { lat: 19.8762, lng: 75.3433 },
+  'beed': { lat: 18.9891, lng: 75.7601 },
+  'bhandara': { lat: 21.1705, lng: 79.6549 },
+  'buldhana': { lat: 20.5293, lng: 76.1843 },
+  'chandrapur': { lat: 19.9615, lng: 79.2961 },
+  'dhule': { lat: 20.9042, lng: 74.7749 },
+  'gadchiroli': { lat: 20.1849, lng: 80.0028 },
+  'gondia': { lat: 21.4624, lng: 80.1961 },
+  'hingoli': { lat: 19.7183, lng: 77.1479 },
+  'jalgaon': { lat: 21.0077, lng: 75.5626 },
+  'jalna': { lat: 19.8347, lng: 75.8816 },
+  'kolhapur': { lat: 16.7050, lng: 74.2433 },
+  'latur': { lat: 18.4088, lng: 76.5604 },
+  'mumbai': { lat: 18.9388, lng: 72.8353 },
+  'mumbai suburban': { lat: 19.1176, lng: 72.8631 },
+  'nagpur': { lat: 21.1458, lng: 79.0882 },
+  'nanded': { lat: 19.1383, lng: 77.3210 },
+  'nandurbar': { lat: 21.3712, lng: 74.2400 },
+  'nashik': { lat: 19.9975, lng: 73.7898 },
+  'dharashiv': { lat: 18.1861, lng: 76.0419 },
+  'osmanabad': { lat: 18.1861, lng: 76.0419 },
+  'palghar': { lat: 19.6936, lng: 72.7655 },
+  'parbhani': { lat: 19.2686, lng: 76.7712 },
+  'pune': { lat: 18.5204, lng: 73.8567 },
+  'raigad': { lat: 18.5158, lng: 73.1822 },
+  'ratnagiri': { lat: 16.9902, lng: 73.3120 },
+  'sangli': { lat: 16.8524, lng: 74.5815 },
+  'satara': { lat: 17.6805, lng: 74.0183 },
+  'sindhudurg': { lat: 16.1246, lng: 73.6913 },
+  'solapur': { lat: 17.6599, lng: 75.9064 },
+  'thane': { lat: 19.2183, lng: 72.9781 },
+  'wardha': { lat: 20.7453, lng: 78.6022 },
+  'washim': { lat: 20.1107, lng: 77.1342 },
+  'yavatmal': { lat: 20.3888, lng: 78.1204 },
+  'rahuri': { lat: 19.3951, lng: 74.6534 }
+};
 
 /**
  * Generate JWT Token Helper
@@ -33,6 +77,7 @@ const register = async (req, res, next) => {
       shopName,
       shopAddress,
       shopContact,
+      location
     } = req.body;
 
     // Validate required fields
@@ -86,6 +131,33 @@ const register = async (req, res, next) => {
         .filter(Boolean);
     }
 
+    // Calculate registered location coordinates
+    let userLocation = undefined;
+    if (location && Number.isFinite(Number(location.lat)) && Number.isFinite(Number(location.lng))) {
+      userLocation = { lat: Number(location.lat), lng: Number(location.lng) };
+    } else if (village || taluka || district || address) {
+      try {
+        const geocoded = await geocodeAddress({
+          village: village || '',
+          taluka: taluka || '',
+          district: district || '',
+          address: address || '',
+          state: req.body.state || 'Maharashtra',
+          country: 'India'
+        });
+        if (geocoded && geocoded.lat && geocoded.lng) {
+          userLocation = { lat: Number(geocoded.lat), lng: Number(geocoded.lng) };
+        }
+      } catch (e) {}
+    }
+
+    if (!userLocation && district) {
+      const distKey = district.toLowerCase().trim();
+      if (DISTRICT_COORDINATES[distKey]) {
+        userLocation = DISTRICT_COORDINATES[distKey];
+      }
+    }
+
     // Create user object with role-based attributes
     const userData = {
       name: name.trim(),
@@ -97,7 +169,12 @@ const register = async (req, res, next) => {
       village: village ? village.trim() : '',
       taluka: taluka ? taluka.trim() : '',
       district: district ? district.trim() : '',
+      state: req.body.state ? req.body.state.trim() : 'Maharashtra',
     };
+
+    if (userLocation) {
+      userData.location = userLocation;
+    }
 
     if (userRole === 'farmer') {
       userData.landSize = landSize ? landSize.toString().trim() : '';

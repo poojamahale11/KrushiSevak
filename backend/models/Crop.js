@@ -27,6 +27,11 @@ const cropSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    state: {
+      type: String,
+      trim: true,
+      default: 'Maharashtra',
+    },
     cropName: {
       type: String,
       required: [true, 'Crop name is required'],
@@ -75,7 +80,7 @@ const cropSchema = new mongoose.Schema(
 );
 
 // Indexes for fast regional queries
-cropSchema.index({ district: 1, taluka: 1, village: 1 });
+cropSchema.index({ state: 1, district: 1, taluka: 1, village: 1 });
 cropSchema.index({ farmer: 1 });
 cropSchema.index({ cropName: 1 });
 

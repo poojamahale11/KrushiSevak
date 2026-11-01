@@ -50,7 +50,7 @@ export const Login = () => {
     setError('');
 
     if (!email.trim() || !password) {
-      setError('Please provide both email and password.');
+      setError(t('errorEmailPassword'));
       return;
     }
 
@@ -64,7 +64,7 @@ export const Login = () => {
 
       navigate(targetPath, { replace: true });
     } catch (err) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+      setError(err.message || t('errorLoginFailed'));
     } finally {
       setSubmitting(false);
     }

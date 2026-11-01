@@ -34,11 +34,13 @@ import {
   Check,
   ChevronRight,
   Eye,
-  Award
+  Award,
+  ArrowLeft
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { api } from '../services/api';
+import { CreateListingModal } from '../components/CreateListingModal';
 
 export const FarmerDashboard = () => {
   const { user, updateUser } = useAuth();
@@ -59,7 +61,9 @@ export const FarmerDashboard = () => {
     expiryDate:'',
     description:'' 
   });
-  const [listingImage, setListingImage] = useState(null);
+  const [listingImages, setListingImages] = useState([]);
+  const [viewPhotosListing, setViewPhotosListing] = useState(null);
+  const [viewPhotosIdx, setViewPhotosIdx] = useState(0);
   const [locationSaving, setLocationSaving] = useState(false);
   const [weather, setWeather] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -105,6 +109,11 @@ export const FarmerDashboard = () => {
     expectedYield: '',
     status: 'Growing',
     notes: '',
+    sellOnMarketplace: false,
+    pricePerUnit: '',
+    quantity: '',
+    unit: 'quintal',
+    quality: 'Grade A',
   });
 
   // Load farmer data, crops, and weather
@@ -224,6 +233,34 @@ export const FarmerDashboard = () => {
     }
   };
 
+  // Keyboard shortcut: close photo viewer on ESC
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && photoViewerOpen) {
+        setPhotoViewerOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [photoViewerOpen]);
+
+  // Remove Profile Photo handler
+  const handleRemoveProfilePhoto = async () => {
+    try {
+      setError('');
+      setSuccessMsg('');
+      setProfileForm((prev) => ({ ...prev, profileImage: '' }));
+      const res = await api.updateProfile({ profileImage: '' });
+      if (res.success && res.user) {
+        updateUser(res.user);
+        setSuccessMsg('Profile photo removed successfully.');
+        setPhotoViewerOpen(false);
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to remove photo.');
+    }
+  };
+
   // Handle Profile Update
   const handleSaveProfile = async (e) => {
     e.preventDefault();
@@ -266,7 +303,12 @@ export const FarmerDashboard = () => {
         const res = await api.addCrop(cropForm);
         if (res.success && res.crop) {
           setCrops((prev) => [res.crop, ...prev]);
-          setSuccessMsg('New crop registered successfully!');
+          if (res.listing) {
+            setListings((prev) => [res.listing, ...prev]);
+            setSuccessMsg('🌾 Crop registered and immediately published to the Marketplace for customers!');
+          } else {
+            setSuccessMsg('New crop registered successfully!');
+          }
         }
       }
       setCropModalOpen(false);
@@ -344,6 +386,11 @@ export const FarmerDashboard = () => {
       expectedYield: '',
       status: 'Growing',
       notes: '',
+      sellOnMarketplace: false,
+      pricePerUnit: '',
+      quantity: '',
+      unit: 'quintal',
+      quality: 'Grade A',
     });
   };
 
@@ -364,29 +411,49 @@ export const FarmerDashboard = () => {
     }, () => { setLocationSaving(false); setError('Location permission was not allowed.'); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
   };
 
-  const handleSaveListing = async (e) => {
-    e.preventDefault(); setError(''); setSuccessMsg('');
+  const handleListingImagesChange = (e) => {
+    const selected = Array.from(e.target.files || []);
+    if (!selected.length) return;
+    setError('');
+    setListingImages(prev => {
+      const combined = [...prev, ...selected];
+      if (combined.length > 5) {
+        setError('Maximum 5 photos allowed per listing. Keeping the first 5 photos.');
+        return combined.slice(0, 5);
+      }
+      return combined;
+    });
+  };
+
+  const handleRemoveListingImage = (indexToRemove) => {
+    setListingImages(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleSaveListing = async (formData, images) => {
+    setError(''); setSuccessMsg('');
+
     try {
       const payload = {
-        ...listingForm,
-        village: listingForm.village || user?.village || '',
-        taluka: listingForm.taluka || user?.taluka || '',
-        district: listingForm.district || user?.district || '',
+        ...formData,
+        village: formData.village || user?.village || '',
+        taluka: formData.taluka || user?.taluka || '',
+        district: formData.district || user?.district || '',
       };
       const res = await api.createCropListing(payload);
       if (res.success) {
         let savedListing = res.listing;
-        if (listingImage) {
-          const imageRes = await api.uploadCropListingImage(savedListing._id, listingImage);
-          if (imageRes.success) savedListing = imageRes.listing;
+        if (images && images.length > 0) {
+          const imageRes = await api.uploadCropListingImages(savedListing._id, images);
+          if (imageRes.success && imageRes.listing) savedListing = imageRes.listing;
         }
         setListings(prev => [savedListing, ...prev]);
         setListingModalOpen(false);
-        setListingImage(null);
-        setListingForm({ cropName:'', category:'Vegetable', quantity:'', unit:'kg', pricePerUnit:'', quality:'', harvestDate:'', expiryDate:'', description:'', village:'', taluka:'', district:'' });
-        setSuccessMsg('Crop published to marketplace successfully!');
+        setSuccessMsg(`🌾 Produce "${savedListing.cropName}" published to marketplace with ${savedListing.images?.length || images.length} quality photos!`);
       }
-    } catch (err) { setError(err.message || 'Failed to create crop listing.'); }
+    } catch (err) { 
+      setError(err.message || 'Failed to create crop listing.'); 
+      throw err; // Re-throw so modal can handle it
+    }
   };
 
   const handleDeleteListing = async (id) => {
@@ -465,8 +532,13 @@ export const FarmerDashboard = () => {
         <div className="dashboard-header" style={{ background: 'linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%)', borderRadius: 'var(--radius-lg)', padding: '2rem', color: '#ffffff', boxShadow: 'var(--shadow-md)', marginBottom: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
             
-            {/* Avatar & Photo Upload Trigger */}
-            <div className="farmer-avatar-upload-wrap">
+            {/* Avatar & Photo Upload Trigger (Click to Open WhatsApp-Style Full Photo) */}
+            <div
+              className="farmer-avatar-upload-wrap"
+              onClick={() => setPhotoViewerOpen(true)}
+              style={{ cursor: 'pointer', position: 'relative' }}
+              title="Click to view profile photo (WhatsApp style)"
+            >
               {profileForm.profileImage || user?.profileImage ? (
                 <img
                   src={profileForm.profileImage || user?.profileImage}
@@ -481,10 +553,32 @@ export const FarmerDashboard = () => {
                   {(user?.name || 'F').charAt(0).toUpperCase()}
                 </div>
               )}
+              <div
+                className="avatar-hover-overlay"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: '50%',
+                  background: 'rgba(0, 0, 0, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: 0,
+                  transition: 'opacity 0.2s ease',
+                }}
+              >
+                <Eye size={22} style={{ color: '#ffffff' }} />
+              </div>
               <button
                 type="button"
                 className="avatar-camera-btn"
-                onClick={() => photoInputRef.current?.click()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  photoInputRef.current?.click();
+                }}
                 title="Upload or Change Profile Photo"
               >
                 <Camera size={16} />
@@ -531,10 +625,33 @@ export const FarmerDashboard = () => {
               </button>
               <button
                 onClick={openAddCropModal}
-                className="btn btn-sm btn-primary"
-                style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}
+                className="btn btn-sm"
+                style={{ background: 'rgba(255, 255, 255, 0.25)', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.5)' }}
               >
                 <Plus size={16} /> Register Crop
+              </button>
+              <button
+                onClick={() => {
+                  setListingForm({
+                    cropName: '',
+                    category: 'Vegetable',
+                    quantity: '',
+                    unit: 'quintal',
+                    pricePerUnit: '',
+                    quality: 'Grade A',
+                    harvestDate: '',
+                    expiryDate: '',
+                    description: '',
+                    village: user?.village || '',
+                    taluka: user?.taluka || '',
+                    district: user?.district || '',
+                  });
+                  setListingModalOpen(true);
+                }}
+                className="btn btn-sm btn-primary"
+                style={{ background: '#16a34a', borderColor: '#16a34a', boxShadow: '0 4px 12px rgba(0,0,0,0.25)', fontWeight: 700 }}
+              >
+                <ShoppingBag size={16} /> Sell Crop on Marketplace
               </button>
             </div>
 
@@ -776,47 +893,174 @@ export const FarmerDashboard = () => {
         {/* TAB 2: MARKETPLACE PRODUCE LISTINGS */}
         {activeTab === 'listings' && (
           <div className="dash-card" style={{ marginBottom: '2.5rem' }}>
-            <div className="dash-card-header" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+            <div className="dash-card-header" style={{ flexWrap: 'wrap', gap: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <ShoppingBag size={22} style={{ color: '#0288d1' }} />
-                  <span>Sell Your Harvest Directly</span>
+                  <ShoppingBag size={22} style={{ color: '#16a34a' }} />
+                  <span>Marketplace Produce Listings ({listings.length})</span>
                 </h3>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.25rem 0 0' }}>
-                  Publish your available harvest so consumers and buyers can contact you directly.
+                  Crops published here are live in the customer marketplace for immediate purchase and enquiries.
                 </p>
               </div>
-              <button onClick={() => setListingModalOpen(true)} className="btn btn-sm btn-primary">
-                + Create Produce Listing
-              </button>
+              <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
+                <Link to="/marketplace" className="btn btn-sm btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Eye size={14} /> View in Marketplace ↗
+                </Link>
+                <button
+                  onClick={() => {
+                    setListingForm({
+                      cropName: '',
+                      category: 'Vegetable',
+                      quantity: '',
+                      unit: 'quintal',
+                      pricePerUnit: '',
+                      quality: 'Grade A',
+                      harvestDate: '',
+                      expiryDate: '',
+                      description: '',
+                      village: user?.village || '',
+                      taluka: user?.taluka || '',
+                      district: user?.district || '',
+                    });
+                    setListingModalOpen(true);
+                  }}
+                  className="btn btn-sm btn-primary"
+                  style={{ background: '#16a34a', borderColor: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  <Plus size={15} /> + Add Crop for Sale
+                </button>
+              </div>
             </div>
 
             {listings.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '2.5rem 1rem' }}>
-                <ShoppingBag size={42} style={{ color: '#94a3b8', margin: '0 auto 0.75rem' }} />
-                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>No active marketplace listings published yet.</p>
-                <button onClick={() => setListingModalOpen(true)} className="btn btn-sm btn-primary" style={{ marginTop: '0.75rem' }}>
-                  + Create First Listing
+              <div style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+                <ShoppingBag size={48} style={{ color: '#94a3b8', margin: '0 auto 0.75rem' }} />
+                <h4 style={{ fontSize: '1.1rem', marginBottom: '0.35rem' }}>No Active Produce Listings</h4>
+                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', maxWidth: '460px', margin: '0 auto 1.25rem' }}>
+                  You haven't listed any crops for sale yet. Publish your crops so customers across Maharashtra can find and buy from you directly.
+                </p>
+                <button
+                  onClick={() => {
+                    setListingForm({
+                      cropName: '',
+                      category: 'Vegetable',
+                      quantity: '',
+                      unit: 'quintal',
+                      pricePerUnit: '',
+                      quality: 'Grade A',
+                      harvestDate: '',
+                      expiryDate: '',
+                      description: '',
+                      village: user?.village || '',
+                      taluka: user?.taluka || '',
+                      district: user?.district || '',
+                    });
+                    setListingModalOpen(true);
+                  }}
+                  className="btn btn-sm btn-primary"
+                  style={{ background: '#16a34a', borderColor: '#16a34a' }}
+                >
+                  <Plus size={15} /> Publish Your First Crop for Sale
                 </button>
               </div>
             ) : (
-              <div className="produce-grid" style={{ marginTop: '1.25rem' }}>
+              <div className="produce-grid" style={{ marginTop: '1.25rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1.25rem' }}>
                 {filteredListings.map((l) => (
-                  <div className="produce-card" key={l._id}>
-                    {l.imageUrl && (
-                      <img src={l.imageUrl} alt={l.cropName} style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: '10px 10px 0 0', display: 'block', marginBottom: '0.75rem' }} />
-                    )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <b style={{ fontSize: '1.05rem', color: 'var(--text-main)' }}>{l.cropName}</b>
-                      <span className="crop-category-badge">{l.quality || l.category}</span>
+                  <div
+                    className="produce-card"
+                    key={l._id}
+                    style={{
+                      background: '#ffffff',
+                      borderRadius: '12px',
+                      border: '1px solid var(--border-light)',
+                      overflow: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column'
+                    }}
+                  >
+                    <div style={{ position: 'relative', height: 150, background: '#f0fdf4', overflow: 'hidden' }}>
+                      {l.imageUrl || (l.images && l.images.length > 0) ? (
+                        <img
+                          src={l.images?.[0] || l.imageUrl}
+                          alt={l.cropName}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', cursor: 'pointer' }}
+                          onClick={() => { setViewPhotosListing(l); setViewPhotosIdx(0); }}
+                        />
+                      ) : (
+                        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
+                          <ShoppingBag size={36} style={{ opacity: 0.7 }} />
+                        </div>
+                      )}
+                      {l.images && l.images.length > 0 && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            bottom: '8px',
+                            right: '8px',
+                            background: 'rgba(15, 23, 42, 0.85)',
+                            color: '#ffffff',
+                            padding: '0.2rem 0.55rem',
+                            borderRadius: '6px',
+                            fontSize: '0.74rem',
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => { setViewPhotosListing(l); setViewPhotosIdx(0); }}
+                        >
+                          <Camera size={12} />
+                          {l.images.length} Photos
+                        </span>
+                      )}
                     </div>
-                    <p style={{ fontSize: '0.9rem', margin: '0.4rem 0 0.8rem', color: 'var(--primary-600)', fontWeight: 700 }}>
-                      ₹{l.pricePerUnit} / {l.unit} • Available: {l.quantity} {l.unit}
-                    </p>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button className="btn btn-sm btn-danger-outline" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleDeleteListing(l._id)}>
-                        <Trash2 size={14} /> Remove
-                      </button>
+                    <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                        <b style={{ fontSize: '1.05rem', color: 'var(--text-main)' }}>{l.cropName}</b>
+                        <span className="crop-category-badge" style={{ background: '#16a34a', color: '#fff', border: 'none' }}>
+                          {l.quality || l.category}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '1.1rem', margin: '0.2rem 0 0.5rem', color: 'var(--primary-600)', fontWeight: 800 }}>
+                        ₹{l.pricePerUnit} <small style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>/{l.unit}</small>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+                          • {l.quantity} {l.unit} available
+                        </span>
+                      </p>
+                      {l.description && (
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 0.75rem', lineHeight: 1.4 }}>
+                          {l.description}
+                        </p>
+                      )}
+                      <div style={{ marginTop: 'auto', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {l.images && l.images.length > 0 && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline"
+                            style={{ flex: 1, justifyContent: 'center', fontSize: '0.78rem', padding: '0.35rem' }}
+                            onClick={() => { setViewPhotosListing(l); setViewPhotosIdx(0); }}
+                          >
+                            <Camera size={13} /> Photos ({l.images.length})
+                          </button>
+                        )}
+                        <Link
+                          to="/marketplace"
+                          className="btn btn-sm btn-outline"
+                          style={{ flex: 1, justifyContent: 'center', fontSize: '0.78rem', padding: '0.35rem' }}
+                        >
+                          <Eye size={13} /> View Live
+                        </Link>
+                        <button
+                          className="btn btn-sm btn-danger-outline"
+                          style={{ padding: '0.35rem 0.65rem' }}
+                          onClick={() => handleDeleteListing(l._id)}
+                          title="Remove Listing"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -967,7 +1211,11 @@ export const FarmerDashboard = () => {
                 <label className="form-label" style={{ fontWeight: 700, color: 'var(--primary-600)', margin: 0 }}>
                   Profile Photo
                 </label>
-                <div style={{ position: 'relative', width: 90, height: 90 }}>
+                <div 
+                  style={{ position: 'relative', width: 90, height: 90, cursor: 'pointer' }}
+                  onClick={() => setPhotoViewerOpen(true)}
+                  title="Click to view full photo (WhatsApp style)"
+                >
                   {profileForm.profileImage || user?.profileImage ? (
                     <img
                       src={profileForm.profileImage || user?.profileImage}
@@ -1142,7 +1390,7 @@ export const FarmerDashboard = () => {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Sugarcane (ऊस), Cotton (कापूस), Onion"
+                    placeholder="e.g. Sugarcane (ऊस), Cotton (कापूस), Onion, Wheat"
                     className="form-input"
                     value={cropForm.cropName}
                     onChange={(e) => setCropForm({ ...cropForm, cropName: e.target.value })}
@@ -1247,6 +1495,73 @@ export const FarmerDashboard = () => {
                     onChange={(e) => setCropForm({ ...cropForm, notes: e.target.value })}
                   />
                 </div>
+
+                {/* Sell on Marketplace Toggle for New Crops */}
+                {!editingCrop && (
+                  <div className="form-group col-span-2" style={{
+                    background: '#f0fdf4',
+                    padding: '1rem',
+                    borderRadius: '10px',
+                    border: '1px solid #bbf7d0',
+                    marginTop: '0.25rem'
+                  }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', cursor: 'pointer', fontWeight: 700, color: '#166534', fontSize: '0.92rem' }}>
+                      <input
+                        type="checkbox"
+                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        checked={cropForm.sellOnMarketplace}
+                        onChange={(e) => setCropForm({ ...cropForm, sellOnMarketplace: e.target.checked })}
+                      />
+                      <span>🌾 Also list this crop for sale on the Marketplace immediately</span>
+                    </label>
+                    <p style={{ fontSize: '0.8rem', color: '#15803d', margin: '0.35rem 0 0.75rem 2rem' }}>
+                      Customers searching in the marketplace will immediately see your crop listing with your contact and farm details.
+                    </p>
+
+                    {cropForm.sellOnMarketplace && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginTop: '0.75rem', paddingLeft: '2rem' }}>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.8rem', color: '#166534' }}>Price per Unit (₹) *</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            required={cropForm.sellOnMarketplace}
+                            placeholder="e.g. 35"
+                            className="form-input"
+                            value={cropForm.pricePerUnit}
+                            onChange={(e) => setCropForm({ ...cropForm, pricePerUnit: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.8rem', color: '#166534' }}>Sale Quantity *</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            required={cropForm.sellOnMarketplace}
+                            placeholder="e.g. 50"
+                            className="form-input"
+                            value={cropForm.quantity}
+                            onChange={(e) => setCropForm({ ...cropForm, quantity: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ fontSize: '0.8rem', color: '#166534' }}>Unit</label>
+                          <select
+                            className="form-input"
+                            value={cropForm.unit}
+                            onChange={(e) => setCropForm({ ...cropForm, unit: e.target.value })}
+                          >
+                            <option value="quintal">quintal</option>
+                            <option value="kg">kg</option>
+                            <option value="ton">ton</option>
+                            <option value="box">box</option>
+                            <option value="bag">bag</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
@@ -1255,7 +1570,7 @@ export const FarmerDashboard = () => {
                 </button>
                 <button type="submit" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                   <Save size={16} />
-                  <span>{editingCrop ? 'Update Crop' : 'Save Crop'}</span>
+                  <span>{editingCrop ? 'Update Crop' : 'Save & Publish Crop'}</span>
                 </button>
               </div>
             </form>
@@ -1264,133 +1579,437 @@ export const FarmerDashboard = () => {
       )}
 
       {/* 3. Create Produce Listing Modal */}
-      {listingModalOpen && (
-        <div className="modal-overlay" onClick={() => setListingModalOpen(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+      <CreateListingModal
+        isOpen={listingModalOpen}
+        onClose={() => setListingModalOpen(false)}
+        onSubmit={handleSaveListing}
+        user={user}
+      />
+
+      {/* ================= CROP PHOTOS GALLERY MODAL ================= */}
+      {viewPhotosListing && (
+        <div className="modal-overlay" onClick={() => setViewPhotosListing(null)}>
+          <div className="modal-box" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>
-                <ShoppingBag size={20} style={{ color: 'var(--primary-500)' }} />
-                <span>Create Produce Listing</span>
+                <Camera size={20} style={{ color: '#16a34a' }} />
+                <span>Crop Quality Photos — {viewPhotosListing.cropName}</span>
               </h3>
-              <button onClick={() => setListingModalOpen(false)} className="modal-close-btn">
+              <button onClick={() => setViewPhotosListing(null)} className="modal-close-btn">
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveListing}>
-              <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-                <div className="form-group col-span-2">
-                  <label className="form-label">Crop / Produce Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Organic Sugarcane, Fresh Tomatoes"
-                    className="form-input"
-                    value={listingForm.cropName}
-                    onChange={(e) => setListingForm({ ...listingForm, cropName: e.target.value })}
-                  />
-                </div>
+            {/* Photos Display */}
+            {(() => {
+              const allImgs = (viewPhotosListing.images && viewPhotosListing.images.length > 0)
+                ? viewPhotosListing.images
+                : (viewPhotosListing.imageUrl ? [viewPhotosListing.imageUrl] : []);
+              const currentImg = allImgs[viewPhotosIdx] || allImgs[0];
 
-                <div className="form-group">
-                  <label className="form-label">Category</label>
-                  <select
-                    className="form-input"
-                    value={listingForm.category}
-                    onChange={(e) => setListingForm({ ...listingForm, category: e.target.value })}
-                  >
-                    <option value="Vegetable">Vegetable</option>
-                    <option value="Fruit">Fruit</option>
-                    <option value="Grain">Grain / Cereal</option>
-                    <option value="Pulse">Pulse / Legume</option>
-                    <option value="Sugarcane">Sugarcane</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
+              return (
+                <div>
+                  <div style={{ position: 'relative', height: '320px', background: '#0f172a', borderRadius: '10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {currentImg ? (
+                      <img
+                        src={currentImg}
+                        alt={viewPhotosListing.cropName}
+                        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                      />
+                    ) : (
+                      <div style={{ color: '#94a3b8', textAlign: 'center' }}>
+                        <Camera size={48} style={{ opacity: 0.5, margin: '0 auto 0.5rem' }} />
+                        <p>No photos uploaded for this listing</p>
+                      </div>
+                    )}
+                    {allImgs.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setViewPhotosIdx(prev => (prev > 0 ? prev - 1 : allImgs.length - 1))}
+                          style={{
+                            position: 'absolute',
+                            left: '10px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'rgba(0,0,0,0.6)',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '36px',
+                            height: '36px',
+                            cursor: 'pointer',
+                            fontSize: '18px'
+                          }}
+                        >
+                          ‹
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setViewPhotosIdx(prev => (prev < allImgs.length - 1 ? prev + 1 : 0))}
+                          style={{
+                            position: 'absolute',
+                            right: '10px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'rgba(0,0,0,0.6)',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '36px',
+                            height: '36px',
+                            cursor: 'pointer',
+                            fontSize: '18px'
+                          }}
+                        >
+                          ›
+                        </button>
+                        <span style={{
+                          position: 'absolute',
+                          bottom: '10px',
+                          right: '10px',
+                          background: 'rgba(0,0,0,0.75)',
+                          color: '#fff',
+                          padding: '0.2rem 0.6rem',
+                          borderRadius: '6px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700
+                        }}>
+                          {viewPhotosIdx + 1} / {allImgs.length}
+                        </span>
+                      </>
+                    )}
+                  </div>
 
-                <div className="form-group">
-                  <label className="form-label">Quality Grade</label>
-                  <select
-                    className="form-input"
-                    value={listingForm.quality}
-                    onChange={(e) => setListingForm({ ...listingForm, quality: e.target.value })}
-                  >
-                    <option value="Grade A">Grade A (Premium)</option>
-                    <option value="Grade B">Grade B (Standard)</option>
-                    <option value="Organic">Organic Certified</option>
-                  </select>
-                </div>
+                  {/* Thumbnail Row */}
+                  {allImgs.length > 1 && (
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+                      {allImgs.map((imgUrl, i) => (
+                        <div
+                          key={i}
+                          onClick={() => setViewPhotosIdx(i)}
+                          style={{
+                            width: '64px',
+                            height: '64px',
+                            borderRadius: '6px',
+                            overflow: 'hidden',
+                            cursor: 'pointer',
+                            border: viewPhotosIdx === i ? '2px solid #16a34a' : '2px solid transparent',
+                            flexShrink: 0
+                          }}
+                        >
+                          <img src={imgUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
-                <div className="form-group">
-                  <label className="form-label">Available Quantity *</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    required
-                    placeholder="e.g. 500"
-                    className="form-input"
-                    value={listingForm.quantity}
-                    onChange={(e) => setListingForm({ ...listingForm, quantity: e.target.value })}
-                  />
+                  <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      Total <b>{allImgs.length}</b> verified photos uploaded for buyers
+                    </span>
+                    <button type="button" onClick={() => setViewPhotosListing(null)} className="btn btn-outline btn-sm">
+                      Close
+                    </button>
+                  </div>
                 </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
-                <div className="form-group">
-                  <label className="form-label">Unit</label>
-                  <select
-                    className="form-input"
-                    value={listingForm.unit}
-                    onChange={(e) => setListingForm({ ...listingForm, unit: e.target.value })}
-                  >
-                    <option value="kg">kg</option>
-                    <option value="quintal">quintal</option>
-                    <option value="ton">ton</option>
-                    <option value="box">box</option>
-                  </select>
-                </div>
-
-                <div className="form-group col-span-2">
-                  <label className="form-label">Price per Unit (₹) *</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    required
-                    placeholder="e.g. 35"
-                    className="form-input"
-                    value={listingForm.pricePerUnit}
-                    onChange={(e) => setListingForm({ ...listingForm, pricePerUnit: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group col-span-2">
-                  <label className="form-label">Produce Photo (Optional)</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="form-input"
-                    onChange={(e) => setListingImage(e.target.files?.[0] || null)}
-                  />
-                </div>
-
-                <div className="form-group col-span-2">
-                  <label className="form-label">Description</label>
-                  <textarea
-                    rows={2}
-                    className="form-input"
-                    placeholder="Farm fresh harvest, direct field pickup available."
-                    value={listingForm.description}
-                    onChange={(e) => setListingForm({ ...listingForm, description: e.target.value })}
-                  />
-                </div>
+      {/* ================= WHATSAPP-STYLE FULL PROFILE PHOTO VIEWER MODAL ================= */}
+      {photoViewerOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(9, 17, 13, 0.94)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            zIndex: 2000,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+          onClick={() => setPhotoViewerOpen(false)}
+        >
+          {/* WhatsApp Top Bar */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '1rem 1.5rem',
+              background: 'rgba(15, 23, 19, 0.9)',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+              color: '#ffffff',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+              <button
+                onClick={() => setPhotoViewerOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  padding: '0.35rem',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title="Back"
+              >
+                <ArrowLeft size={22} />
+              </button>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#ffffff' }}>
+                  {user?.name || 'Farmer Profile'}
+                </h3>
+                <span style={{ fontSize: '0.78rem', color: '#86efac', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <CheckCircle2 size={12} /> Verified KrushiSevak Farmer
+                </span>
               </div>
+            </div>
 
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                <button type="button" onClick={() => setListingModalOpen(false)} className="btn btn-outline">
-                  {t('cancel')}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                className="btn btn-sm"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  color: '#ffffff',
+                  border: '1px solid rgba(255, 255, 255, 0.25)',
+                  borderRadius: 'var(--radius-full)',
+                  padding: '0.4rem 0.85rem',
+                  fontSize: '0.82rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  cursor: 'pointer',
+                }}
+                title="Change Photo"
+              >
+                <Camera size={15} />
+                <span>Change Photo</span>
+              </button>
+
+              {(profileForm.profileImage || user?.profileImage) && (
+                <button
+                  type="button"
+                  onClick={handleRemoveProfilePhoto}
+                  className="btn btn-sm"
+                  style={{
+                    background: 'rgba(220, 38, 38, 0.2)',
+                    color: '#fca5a5',
+                    border: '1px solid rgba(220, 38, 38, 0.4)',
+                    borderRadius: 'var(--radius-full)',
+                    padding: '0.4rem 0.75rem',
+                    fontSize: '0.82rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    cursor: 'pointer',
+                  }}
+                  title="Remove Photo"
+                >
+                  <Trash2 size={14} />
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Publish Listing
-                </button>
-              </div>
-            </form>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setPhotoViewerOpen(false)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: 'none',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  padding: '0.45rem',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title="Close (ESC)"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+
+          {/* Center Image Display (WhatsApp Zoom View) */}
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1.5rem',
+            }}
+            onClick={() => setPhotoViewerOpen(false)}
+          >
+            <div
+              style={{
+                position: 'relative',
+                maxWidth: '440px',
+                maxHeight: '440px',
+                width: '88vw',
+                height: '88vw',
+                borderRadius: '20px',
+                overflow: 'hidden',
+                boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.15)',
+                background: '#132a13',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                animation: 'whatsappZoom 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {profileForm.profileImage || user?.profileImage ? (
+                <img
+                  src={profileForm.profileImage || user?.profileImage}
+                  alt={user?.name || 'Profile'}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: 'block',
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '1rem',
+                    background: 'linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%)',
+                    color: '#ffffff',
+                    padding: '2rem',
+                    textAlign: 'center',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '110px',
+                      height: '110px',
+                      borderRadius: '50%',
+                      background: 'rgba(255, 255, 255, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '3.5rem',
+                      fontWeight: 800,
+                      border: '2px dashed rgba(255, 255, 255, 0.4)',
+                    }}
+                  >
+                    {(user?.name || 'F').charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 style={{ margin: '0 0 0.25rem', color: '#ffffff', fontSize: '1.25rem' }}>No Profile Photo Yet</h4>
+                    <p style={{ margin: 0, color: '#dcfce7', fontSize: '0.85rem' }}>
+                      Add a farm or profile photo to build trust with buyers & Krushi Kendra owners.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    className="btn btn-primary btn-sm"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.5rem' }}
+                  >
+                    <Camera size={16} />
+                    <span>Upload Photo Now</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom Actions Bar */}
+          <div
+            style={{
+              padding: '1.25rem 1.5rem',
+              background: 'rgba(15, 23, 19, 0.9)',
+              borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '1rem',
+              flexWrap: 'wrap',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              className="btn btn-primary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.6rem 1.4rem',
+                fontSize: '0.92rem',
+                fontWeight: 700,
+                borderRadius: 'var(--radius-full)',
+              }}
+            >
+              <Camera size={17} />
+              <span>{profileForm.profileImage || user?.profileImage ? 'Change Photo' : 'Upload Photo'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setPhotoViewerOpen(false);
+                setProfileModalOpen(true);
+              }}
+              className="btn btn-outline"
+              style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                color: '#ffffff',
+                borderColor: 'rgba(255, 255, 255, 0.3)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.6rem 1.4rem',
+                fontSize: '0.92rem',
+                fontWeight: 600,
+                borderRadius: 'var(--radius-full)',
+              }}
+            >
+              <Edit2 size={16} />
+              <span>Edit Profile Details</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPhotoViewerOpen(false)}
+              className="btn btn-outline"
+              style={{
+                background: 'transparent',
+                color: '#cbd5e1',
+                borderColor: 'rgba(255, 255, 255, 0.2)',
+                padding: '0.6rem 1.2rem',
+                fontSize: '0.9rem',
+                borderRadius: 'var(--radius-full)',
+              }}
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

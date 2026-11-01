@@ -58,7 +58,7 @@ const distanceKm = (lat1, lon1, lat2, lon2) => {
 
 const getListings = async (req, res, next) => {
   try {
-    const { search, district, taluka, status = 'Available', lat, lng } = req.query;
+    const { search, district, taluka, category, minPrice, maxPrice, status = 'Available', lat, lng, sort } = req.query;
     
     // Auto-expire listings only if they have a valid past expiry date set
     const now = new Date();
@@ -77,6 +77,14 @@ const getListings = async (req, res, next) => {
     if (status && status !== 'All') filter.status = status;
     if (district && district !== 'All' && district !== 'All Maharashtra') filter.district = new RegExp(`^${escapeRegex(district.trim())}$`, 'i');
     if (taluka && taluka !== 'All') filter.taluka = new RegExp(`^${escapeRegex(taluka.trim())}$`, 'i');
+    if (category && category !== 'All') filter.category = new RegExp(`^${escapeRegex(category.trim())}$`, 'i');
+    
+    if (minPrice || maxPrice) {
+      filter.pricePerUnit = {};
+      if (minPrice) filter.pricePerUnit.$gte = Number(minPrice);
+      if (maxPrice) filter.pricePerUnit.$lte = Number(maxPrice);
+    }
+
     if (search && search.trim()) {
       const r = new RegExp(escapeRegex(search.trim()), 'i');
       filter.$or = [
@@ -86,7 +94,8 @@ const getListings = async (req, res, next) => {
         { village: r }, 
         { taluka: r }, 
         { district: r },
-        { description: r }
+        { description: r },
+        { quality: r }
       ];
     }
 
@@ -95,14 +104,14 @@ const getListings = async (req, res, next) => {
     const hasCustomerLocation = customerLat !== null && customerLng !== null;
 
     const listings = await CropListing.find(filter)
-      .populate('farmer', 'name mobile village taluka district location landSize crops profileImage')
+      .populate('farmer', 'name mobile email village taluka district location landSize crops profileImage address')
       .sort({ createdAt: -1 });
 
     const enriched = listings.map((listing) => {
       const item = listing.toObject();
       let coords = item.location || item.farmer?.location;
-      if (!coords || !coords.lat || !coords.lng) {
-        const distKey = (item.district || '').toLowerCase();
+      if (!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number' || isNaN(coords.lat) || isNaN(coords.lng)) {
+        const distKey = (item.district || item.farmer?.district || '').toLowerCase().trim();
         coords = DISTRICT_COORDINATES[distKey] || { lat: 19.3951, lng: 74.6534 };
         item.location = coords;
       }
@@ -115,10 +124,20 @@ const getListings = async (req, res, next) => {
       return item;
     });
 
-    // Sort ALL matching listings by distance (nearest first) if customer location is provided
-    const result = hasCustomerLocation
-      ? enriched.sort((a, b) => (a.distanceKm ?? 99999) - (b.distanceKm ?? 99999))
-      : enriched;
+    // Sort listings based on request parameter or customer distance
+    let result = [...enriched];
+    if (sort === 'price-asc') {
+      result.sort((a, b) => (a.pricePerUnit || 0) - (b.pricePerUnit || 0));
+    } else if (sort === 'price-desc') {
+      result.sort((a, b) => (b.pricePerUnit || 0) - (a.pricePerUnit || 0));
+    } else if (sort === 'qty-desc') {
+      result.sort((a, b) => (b.quantity || 0) - (a.quantity || 0));
+    } else if (sort === 'newest') {
+      result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    } else if (sort === 'distance' || hasCustomerLocation) {
+      // Distance sort or default with location: nearest farmers first
+      result.sort((a, b) => (a.distanceKm ?? 99999) - (b.distanceKm ?? 99999));
+    }
 
     res.json({
       success: true,
@@ -206,11 +225,19 @@ const createListing = async (req, res, next) => {
       images: req.body.imageUrl ? [req.body.imageUrl] : (Array.isArray(req.body.images) ? req.body.images : []),
       isActive: true
     });
+
+    // Also sync farmer's crops list in user document
+    if (farmer.crops && !farmer.crops.includes(cropName.trim())) {
+      farmer.crops.push(cropName.trim());
+      await farmer.save();
+    }
     
+    const populatedListing = await CropListing.findById(listing._id).populate('farmer', 'name mobile email village taluka district location landSize crops profileImage address');
+
     res.status(201).json({ 
       success: true, 
-      message: 'Crop listing created successfully. You can now upload images.', 
-      listing,
+      message: 'Crop listing created and published to marketplace successfully!', 
+      listing: populatedListing || listing,
       locationGeocoded: !!listingLocation
     });
   } catch (e) { next(e); }
@@ -250,7 +277,7 @@ const updateListing = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
-// Upload multiple images (up to 5) for a listing
+// Upload multiple images (minimum 1, maximum 5 images per listing)
 const uploadListingImages = async (req, res, next) => {
   try {
     if (req.user.role !== 'farmer') return res.status(403).json({ success: false, message: 'Only farmers can upload crop photos' });
@@ -261,16 +288,34 @@ const uploadListingImages = async (req, res, next) => {
     const files = (req.files && req.files.length > 0) ? req.files : (req.file ? [req.file] : []);
     
     if (files.length === 0) {
-      return res.status(400).json({ success: false, message: 'At least one crop photo is required' });
+      return res.status(400).json({ success: false, message: 'At least one crop photo is required (minimum 1, maximum 5)' });
     }
     
-    const newImages = files.slice(0, 5).map(file => `/uploads/crops/${file.filename}`);
-    listing.images = [...(listing.images || []), ...newImages];
-    if (listing.images.length > 5) listing.images = listing.images.slice(-5);
-    if (newImages.length > 0) listing.imageUrl = newImages[0];
+    const newImages = files.map(file => `/uploads/crops/${file.filename}`);
+    
+    if (req.query.replace === 'true') {
+      listing.images = newImages.slice(0, 5);
+    } else {
+      const existing = listing.images || [];
+      const combined = [...existing, ...newImages.filter(img => !existing.includes(img))];
+      listing.images = combined.slice(0, 5);
+    }
+    
+    if (listing.images && listing.images.length > 0) {
+      listing.imageUrl = listing.images[0];
+    }
     
     await listing.save();
-    res.json({ success: true, message: `${files.length} crop photo(s) uploaded`, listing, imagesUploaded: files.length });
+    
+    const populated = await CropListing.findById(listing._id).populate('farmer', 'name mobile email village taluka district location landSize crops profileImage address');
+    
+    res.json({ 
+      success: true, 
+      message: `${files.length} crop photo(s) uploaded successfully (${listing.images.length} total, max 5)`, 
+      listing: populated || listing, 
+      imagesUploaded: files.length,
+      totalImages: (listing.images || []).length
+    });
   } catch (e) { next(e); }
 };
 

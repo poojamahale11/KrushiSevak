@@ -278,44 +278,158 @@ export const Home = () => {
           </div>
 
           <div className="testimonials-grid">
-            {/* Farmer Testimonial 1 */}
+            {/* Farmer Testimonial 1 - Ramesh Patil with Banner Image */}
             <div className="testimonial-card">
+              {/* Farmer Banner Image at Top */}
+              <div style={{ 
+                width: '100%', 
+                height: '200px', 
+                marginBottom: '1rem',
+                borderRadius: 'var(--radius-lg)',
+                overflow: 'hidden',
+                border: '2px solid var(--primary-100)'
+              }}>
+                <img 
+                  src="/images/farmer2-bhausaheb-banner.jpg" 
+                  alt="Ramesh Patil with grapes"
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    objectFit: 'cover'
+                  }}
+                />
+              </div>
+              
+              {/* Testimonial Text */}
               <p className="testimonial-text">{t('farmerTestimonial1')}</p>
+              
+              {/* Author Info with Avatar */}
               <div className="testimonial-author">
-                <div style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-full)', background: 'var(--primary-100)', color: 'var(--primary-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                <img 
+                  src="/images/farmer1-ramesh.jpg" 
+                  alt="Ramesh Patil"
+                  style={{ 
+                    width: '42px', 
+                    height: '42px', 
+                    borderRadius: 'var(--radius-full)', 
+                    objectFit: 'cover',
+                    border: '2px solid var(--primary-200)'
+                  }}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextElementSibling.style.display = 'flex';
+                  }}
+                />
+                <div style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-full)', background: 'var(--primary-100)', color: 'var(--primary-700)', display: 'none', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
                   RP
                 </div>
                 <div>
                   <div style={{ color: 'var(--text-main)' }}>{t('farmerTestimonial1Author')}</div>
-                  <span className="badge badge-farmer" style={{ fontSize: '0.7rem' }}>Verified Grower</span>
+                  <span className="badge badge-farmer" style={{ fontSize: '0.7rem' }}>{t('verifiedGrower')}</span>
                 </div>
               </div>
             </div>
 
-            {/* Farmer Testimonial 2 */}
+            {/* Farmer Testimonial 2 - Bhausaheb Shinde with Banner Image */}
             <div className="testimonial-card">
+              {/* Farmer Banner Image at Top */}
+              <div style={{ 
+                width: '100%', 
+                height: '200px', 
+                marginBottom: '1rem',
+                borderRadius: 'var(--radius-lg)',
+                overflow: 'hidden',
+                border: '2px solid var(--primary-100)'
+              }}>
+                <img 
+                  src="/images/farmer1-ramesh-banner.jpg" 
+                  alt="Bhausaheb Shinde grape grower"
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    objectFit: 'cover'
+                  }}
+                />
+              </div>
+              
+              {/* Testimonial Text */}
               <p className="testimonial-text">{t('farmerTestimonial2')}</p>
+              
+              {/* Author Info with Avatar */}
               <div className="testimonial-author">
-                <div style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-full)', background: 'var(--primary-100)', color: 'var(--primary-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                <img 
+                  src="/images/farmer2-bhausaheb.jpg" 
+                  alt="Bhausaheb Shinde"
+                  style={{ 
+                    width: '42px', 
+                    height: '42px', 
+                    borderRadius: 'var(--radius-full)', 
+                    objectFit: 'cover',
+                    border: '2px solid var(--primary-200)'
+                  }}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextElementSibling.style.display = 'flex';
+                  }}
+                />
+                <div style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-full)', background: 'var(--primary-100)', color: 'var(--primary-700)', display: 'none', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
                   BS
                 </div>
                 <div>
                   <div style={{ color: 'var(--text-main)' }}>{t('farmerTestimonial2Author')}</div>
-                  <span className="badge badge-farmer" style={{ fontSize: '0.7rem' }}>Grape Exporter</span>
+                  <span className="badge badge-farmer" style={{ fontSize: '0.7rem' }}>{t('grapeExporter')}</span>
                 </div>
               </div>
             </div>
 
-            {/* Customer Testimonial 1 */}
+            {/* Customer Testimonial 1 - Sunita Deshmukh with Banner Image */}
             <div className="testimonial-card">
+              {/* Customer Banner Image at Top */}
+              <div style={{ 
+                width: '100%', 
+                height: '200px', 
+                marginBottom: '1rem',
+                borderRadius: 'var(--radius-lg)',
+                overflow: 'hidden',
+                border: '2px solid #bae6fd'
+              }}>
+                <img 
+                  src="/images/farmer3-sunita-banner.jpg" 
+                  alt="Sunita Deshmukh customer"
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    objectFit: 'cover'
+                  }}
+                />
+              </div>
+              
+              {/* Testimonial Text */}
               <p className="testimonial-text">{t('customerTestimonial1')}</p>
+              
+              {/* Author Info with Avatar */}
               <div className="testimonial-author">
-                <div style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-full)', background: '#e0f2fe', color: '#0288d1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                <img 
+                  src="/images/farmer3-sunita.jpg" 
+                  alt="Sunita Deshmukh"
+                  style={{ 
+                    width: '42px', 
+                    height: '42px', 
+                    borderRadius: 'var(--radius-full)', 
+                    objectFit: 'cover',
+                    border: '2px solid #bae6fd'
+                  }}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextElementSibling.style.display = 'flex';
+                  }}
+                />
+                <div style={{ width: '42px', height: '42px', borderRadius: 'var(--radius-full)', background: '#e0f2fe', color: '#0288d1', display: 'none', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
                   SD
                 </div>
                 <div>
                   <div style={{ color: 'var(--text-main)' }}>{t('customerTestimonial1Author')}</div>
-                  <span className="badge badge-customer" style={{ fontSize: '0.7rem' }}>Consumer</span>
+                  <span className="badge badge-customer" style={{ fontSize: '0.7rem' }}>{t('consumer')}</span>
                 </div>
               </div>
             </div>

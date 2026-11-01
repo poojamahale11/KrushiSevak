@@ -62,6 +62,11 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    state: {
+      type: String,
+      trim: true,
+      default: 'Maharashtra',
+    },
     landSize: {
       type: String,
       trim: true,
