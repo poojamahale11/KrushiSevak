@@ -1,4 +1,4 @@
-const API_BASE_URL = '/api';
+const API_BASE_URL = 'https://krushisevak-deployment.onrender.com/api';
 
 /**
  * Universal Fetch wrapper with automatic JWT authorization header
@@ -19,11 +19,10 @@ async function request(endpoint, options = {}) {
 
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-    
-    // Check if response has content
+
     const contentType = response.headers.get('content-type');
     let data;
-    
+
     if (contentType && contentType.includes('application/json')) {
       const text = await response.text();
       try {
@@ -37,7 +36,9 @@ async function request(endpoint, options = {}) {
     }
 
     if (!response.ok) {
-      const error = new Error(data.message || `HTTP Error ${response.status}: ${response.statusText}`);
+      const error = new Error(
+        data.message || `HTTP Error ${response.status}: ${response.statusText}`
+      );
       error.status = response.status;
       error.data = data;
       throw error;
@@ -45,208 +46,233 @@ async function request(endpoint, options = {}) {
 
     return data;
   } catch (error) {
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      throw new Error('Cannot connect to server. Please ensure the backend is running on http://localhost:5000');
+    if (error instanceof TypeError) {
+      throw new Error('Cannot connect to KrushiSevak backend. Please try again.');
     }
     throw error;
   }
 }
 
 export const api = {
-  // Auth API
-  login: (credentials) => {
-    return request('/auth/login', {
+  // Authentication
+  login: (credentials) =>
+    request('/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
-    });
-  },
+    }),
 
-  register: (userData) => {
-    return request('/auth/register', {
+  register: (userData) =>
+    request('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
-    });
-  },
+    }),
 
-  getMe: () => {
-    return request('/auth/me', {
-      method: 'GET',
-    });
-  },
+  getMe: () => request('/auth/me'),
 
-  // User Profile API
-  getProfile: () => {
-    return request('/users/profile', {
-      method: 'GET',
-    });
-  },
+  // User Profile
+  getProfile: () => request('/users/profile'),
 
-  updateProfile: (profileData) => {
-    return request('/users/profile', {
+  updateProfile: (profileData) =>
+    request('/users/profile', {
       method: 'PUT',
       body: JSON.stringify(profileData),
-    });
-  },
+    }),
 
-  // Crop & Area Data API
-  getMyCrops: () => {
-    return request('/crops/my-crops', {
-      method: 'GET',
-    });
-  },
+  // Crops and Area Data
+  getMyCrops: () => request('/crops/my-crops'),
 
-  addCrop: (cropData) => {
-    return request('/crops', {
+  addCrop: (cropData) =>
+    request('/crops', {
       method: 'POST',
       body: JSON.stringify(cropData),
-    });
-  },
+    }),
 
-  updateCrop: (id, cropData) => {
-    return request(`/crops/${id}`, {
+  updateCrop: (id, cropData) =>
+    request(`/crops/${id}`, {
       method: 'PUT',
       body: JSON.stringify(cropData),
-    });
-  },
+    }),
 
-  deleteCrop: (id) => {
-    return request(`/crops/${id}`, {
-      method: 'DELETE',
-    });
-  },
+  deleteCrop: (id) =>
+    request(`/crops/${id}`, { method: 'DELETE' }),
 
   getAreaData: (params = {}) => {
     const query = new URLSearchParams(params).toString();
-    return request(`/crops/area-data${query ? `?${query}` : ''}`, {
-      method: 'GET',
-    });
+    return request(`/crops/area-data${query ? `?${query}` : ''}`);
   },
 
-  // Crop Disease Detection API
+  // Disease Detection
   analyzeDisease: (imageFile) => {
     const token = localStorage.getItem('krushisevak_token');
     const formData = new FormData();
     formData.append('image', imageFile);
-    return fetch('/api/disease/analyze', {
+
+    return fetch(`${API_BASE_URL}/disease/analyze`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
     }).then(async (response) => {
       const data = await response.json();
       if (!response.ok) {
-        const error = new Error(data.message || 'Disease analysis failed');
-        error.status = response.status;
-        throw error;
+        throw new Error(data.message || 'Disease analysis failed');
       }
       return data;
     });
   },
 
-  getDiseaseHistory: () => request('/disease/history', { method: 'GET' }),
+  getDiseaseHistory: () => request('/disease/history'),
 
-  // Product & Store Inventory API
+  // Products and Store Inventory
   getProducts: (params = {}) => {
     const query = new URLSearchParams(params).toString();
-    return request(`/products${query ? `?${query}` : ''}`, {
-      method: 'GET',
-    });
+    return request(`/products${query ? `?${query}` : ''}`);
   },
 
-  getMyInventory: () => {
-    return request('/products/my-inventory', {
-      method: 'GET',
-    });
-  },
+  getMyInventory: () => request('/products/my-inventory'),
 
-  addProduct: (productData) => {
-    return request('/products', {
+  addProduct: (productData) =>
+    request('/products', {
       method: 'POST',
       body: JSON.stringify(productData),
-    });
-  },
+    }),
 
-  updateProduct: (id, productData) => {
-    return request(`/products/${id}`, {
+  updateProduct: (id, productData) =>
+    request(`/products/${id}`, {
       method: 'PUT',
       body: JSON.stringify(productData),
+    }),
+
+  uploadProductImage: (id, imageFile) => {
+    const token = localStorage.getItem('krushisevak_token');
+    const fd = new FormData();
+    fd.append('image', imageFile);
+
+    return fetch(`${API_BASE_URL}/products/${id}/image`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    }).then(async (r) => {
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.message || 'Image upload failed');
+      return d;
     });
   },
 
-  uploadProductImage: (id, imageFile) => { const token = localStorage.getItem('krushisevak_token'); const fd = new FormData(); fd.append('image', imageFile); return fetch(`/api/products/${id}/image`, { method:'POST', headers: token ? { Authorization:`Bearer ${token}` } : {}, body:fd }).then(async r => { const d=await r.json(); if(!r.ok) throw new Error(d.message || 'Image upload failed'); return d; }); },
-
-  updateStock: (id, stockData) => {
-    return request(`/products/${id}/stock`, {
+  updateStock: (id, stockData) =>
+    request(`/products/${id}/stock`, {
       method: 'PATCH',
       body: JSON.stringify(stockData),
-    });
-  },
+    }),
 
-  deleteProduct: (id) => {
-    return request(`/products/${id}`, {
-      method: 'DELETE',
-    });
-  },
+  deleteProduct: (id) =>
+    request(`/products/${id}`, { method: 'DELETE' }),
 
-  // Farmer-to-Customer Crop Marketplace API
+  // Farmer-to-Customer Crop Marketplace
   getCropListings: (params = {}) => {
     const query = new URLSearchParams(params).toString();
-    return request(`/crop-listings${query ? `?${query}` : ''}`, { method: 'GET' });
-  },
-  getMyCropListings: () => request('/crop-listings/my-listings', { method: 'GET' }),
-  createCropListing: (listingData) => request('/crop-listings', { method: 'POST', body: JSON.stringify(listingData) }),
-  updateCropListing: (id, listingData) => request(`/crop-listings/${id}`, { method: 'PUT', body: JSON.stringify(listingData) }),
-  deleteCropListing: (id) => request(`/crop-listings/${id}`, { method: 'DELETE' }),
-  uploadCropListingImage: (id, imageFile) => { const token = localStorage.getItem('krushisevak_token'); const fd = new FormData(); fd.append('image', imageFile); return fetch(`/api/crop-listings/${id}/image`, { method:'POST', headers: token ? { Authorization:`Bearer ${token}` } : {}, body:fd }).then(async r => { const d=await r.json(); if(!r.ok) throw new Error(d.message || 'Crop photo upload failed'); return d; }); },
-  uploadCropListingImages: (id, imageFiles) => { 
-    const token = localStorage.getItem('krushisevak_token'); 
-    const fd = new FormData(); 
-    imageFiles.forEach(file => fd.append('images', file)); 
-    return fetch(`/api/crop-listings/${id}/images`, { 
-      method:'POST', 
-      headers: token ? { Authorization:`Bearer ${token}` } : {}, 
-      body:fd 
-    }).then(async r => { 
-      const d=await r.json(); 
-      if(!r.ok) throw new Error(d.message || 'Crop photos upload failed'); 
-      return d; 
-    }); 
+    return request(`/crop-listings${query ? `?${query}` : ''}`);
   },
 
-  // Orders API
-  getMyOrders: () => {
-    return request('/orders/my-orders', {
-      method: 'GET',
+  getMyCropListings: () => request('/crop-listings/my-listings'),
+
+  createCropListing: (listingData) =>
+    request('/crop-listings', {
+      method: 'POST',
+      body: JSON.stringify(listingData),
+    }),
+
+  updateCropListing: (id, listingData) =>
+    request(`/crop-listings/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(listingData),
+    }),
+
+  deleteCropListing: (id) =>
+    request(`/crop-listings/${id}`, { method: 'DELETE' }),
+
+  uploadCropListingImage: (id, imageFile) => {
+    const token = localStorage.getItem('krushisevak_token');
+    const fd = new FormData();
+    fd.append('image', imageFile);
+
+    return fetch(`${API_BASE_URL}/crop-listings/${id}/image`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    }).then(async (r) => {
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.message || 'Crop photo upload failed');
+      return d;
     });
   },
 
-  getStoreOrders: () => request('/orders/store-orders', { method: 'GET' }),
+  uploadCropListingImages: (id, imageFiles) => {
+    const token = localStorage.getItem('krushisevak_token');
+    const fd = new FormData();
+    imageFiles.forEach((file) => fd.append('images', file));
 
-  updateStoreOrderStatus: (id, orderStatus) => request(`/orders/store-orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ orderStatus }) }),
+    return fetch(`${API_BASE_URL}/crop-listings/${id}/images`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    }).then(async (r) => {
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.message || 'Crop photos upload failed');
+      return d;
+    });
+  },
 
-  createOrder: (orderData) => {
-    return request('/orders', {
+  // Orders
+  getMyOrders: () => request('/orders/my-orders'),
+
+  getStoreOrders: () => request('/orders/store-orders'),
+
+  updateStoreOrderStatus: (id, orderStatus) =>
+    request(`/orders/store-orders/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ orderStatus }),
+    }),
+
+  createOrder: (orderData) =>
+    request('/orders', {
       method: 'POST',
       body: JSON.stringify(orderData),
-    });
+    }),
+
+  // AI Assistant and Feedback
+  chat: (question, lang = 'en', imageData = '') =>
+    request('/chat', {
+      method: 'POST',
+      body: JSON.stringify({ question, lang, imageData }),
+    }),
+
+  getKendras: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/users/kendras${query ? `?${query}` : ''}`);
   },
 
-  // Phase 5 AI Assistant & Feedback
-  chat: (question, lang = 'en', imageData = '') => request('/chat', { method: 'POST', body: JSON.stringify({ question, lang, imageData }) }),
-  getKendras: (params = {}) => { const query = new URLSearchParams(params).toString(); return request(`/users/kendras${query ? `?${query}` : ''}`, { method: 'GET' }); },
-  getChatHistory: () => request('/chat/history', { method: 'GET' }),
-  sendFeedback: (feedback) => request('/feedback', { method: 'POST', body: JSON.stringify(feedback) }),
-  getMyFeedback: () => request('/feedback/my', { method: 'GET' }),
+  getChatHistory: () => request('/chat/history'),
 
-  // Notifications API
-  getNotifications: () => request('/notifications', { method: 'GET' }),
-  markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: 'PATCH' }),
-  markAllNotificationsRead: () => request('/notifications/read-all', { method: 'PATCH' }),
+  sendFeedback: (feedback) =>
+    request('/feedback', {
+      method: 'POST',
+      body: JSON.stringify(feedback),
+    }),
 
-  // Weather API
+  getMyFeedback: () => request('/feedback/my'),
+
+  // Notifications
+  getNotifications: () => request('/notifications'),
+
+  markNotificationRead: (id) =>
+    request(`/notifications/${id}/read`, { method: 'PATCH' }),
+
+  markAllNotificationsRead: () =>
+    request('/notifications/read-all', { method: 'PATCH' }),
+
+  // Weather
   getWeather: (params = {}) => {
     const query = new URLSearchParams(params).toString();
-    return request(`/weather${query ? `?${query}` : ''}`, {
-      method: 'GET',
-    });
+    return request(`/weather${query ? `?${query}` : ''}`);
   },
 };
